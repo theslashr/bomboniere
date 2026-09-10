@@ -24,22 +24,30 @@
     margin:0; min-height:100svh;
     background:radial-gradient(130% 95% at 50% 0%, var(--wall) 0%, var(--wall-2) 72%);
     color:var(--canvas); font-family:var(--sans); font-weight:350; font-size:15px;
-    display:flex; flex-direction:column; align-items:center;
-    padding:clamp(.9rem,3vw,2rem) clamp(.9rem,3vw,2rem) 3rem;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:clamp(1.2rem,3vw,2.4rem);
     -webkit-font-smoothing:antialiased;
   }
-  h1{
-    margin:0 0 .55rem;
-    font-size:clamp(1.05rem,2.6vw,1.9rem);
-    font-weight:500; letter-spacing:.16em; text-transform:uppercase;
-    text-align:center; line-height:1.25;
+  /* The only heading left is the one in the sheet's header, which inherits
+     that bar's type rather than setting its own. */
+  h1{ margin:0; font:inherit; letter-spacing:inherit; }
+  /* The hint has a job exactly once. It floats under the painting rather than
+     taking a row of its own, and retires the moment the hand arrives - so it
+     costs no height, and the gap it used to leave behind goes with it. */
+  .sub{
+    position:absolute; left:0; right:0; bottom:-1.75rem;
+    color:var(--muted); font-size:.7rem; letter-spacing:.11em;
+    text-transform:uppercase; text-align:center; line-height:1.4;
+    pointer-events:none; margin:0;
+    transition:opacity .6s var(--ease);
   }
-  .sub{ color:var(--muted); font-size:.8rem; letter-spacing:.03em; margin:0 0 var(--breathe); text-align:center; line-height:1.5; }
+  .sub.gone{ opacity:0; }
 
   .stage{
-    perspective:1200px; width:100%; max-width:1000px; flex:1 1 auto;
+    position:relative;
+    perspective:1200px; width:100%; max-width:1000px; flex:0 0 auto;
     display:flex; align-items:center; justify-content:center;
-    min-height:min(46svh,420px);
+    min-height:0;
     touch-action:none;
   }
   .plate{
@@ -57,7 +65,7 @@
      slack turning into margin. */
   .plate canvas{
     display:block; max-width:100%;
-    max-height:min(72svh, calc(100svh - 408px));
+    max-height:min(74svh, calc(100svh - 364px));
     width:auto; height:auto;
   }
   .plate::after{
@@ -140,9 +148,9 @@
   .strip{
     display:flex; gap:.55rem; align-items:center;
     width:max-content; max-width:100%;
-    margin:clamp(1rem,3vw,1.7rem) auto 0;
+    margin:var(--breathe) auto 0;
     overflow-x:auto; overflow-y:hidden;
-    padding:.9rem .9rem 1rem;
+    padding:.5rem .9rem .5rem;
     scrollbar-width:none;
     /* the ends fall away rather than being sliced off mid-thumbnail */
     -webkit-mask-image:linear-gradient(to right, transparent, #000 34px, #000 calc(100% - 34px), transparent);
@@ -199,7 +207,7 @@
 
   /* ---------- everything, on demand ---------- */
   .allBtn{
-    display:block; margin:.85rem auto 0;
+    display:block; margin:var(--breathe) auto 0;
     font:inherit; font-size:.7rem; letter-spacing:.14em; text-transform:uppercase;
     color:var(--muted); background:none; border:0; cursor:pointer;
     padding:.4rem .2rem; transition:color .3s var(--ease);
@@ -286,19 +294,13 @@
      the light. So on a short screen everything has to fit, or the biggest
      region on the display becomes the one place a swipe does nothing. */
   @media (max-height:760px){
-    .stage{ min-height:min(40svh,360px); }
-    .plate canvas{ max-height:min(56svh, calc(100svh - 300px)); }
+    .plate canvas{ max-height:min(58svh, calc(100svh - 322px)); }
     .edition{ margin-top:.85rem; }
-    .strip{ margin-top:.7rem; padding-top:.7rem; padding-bottom:.7rem; }
-    h1{ font-size:clamp(1rem,2.6vw,1.5rem); }
   }
   kbd{ font:inherit; background:rgba(255,255,255,.09); border-radius:3px; padding:0 .3em; }
 </style>
 </head>
 <body>
-
-<h1>Prova rilievo bomboniere</h1>
-<p class="sub" id="sub">Muovi il puntatore sul quadro</p>
 
 <div class="brush-cursor" id="brushCursor" aria-hidden="true">
   <svg viewBox="0 0 40 40" width="40" height="40">
@@ -313,6 +315,7 @@
 
 <div class="stage" id="stage">
   <div class="plate" id="plate"><canvas id="gl"></canvas></div>
+  <p class="sub" id="sub">Muovi il puntatore sul quadro</p>
 </div>
 
 <div class="edition" id="edition" aria-live="polite">
@@ -327,7 +330,7 @@
 
 <div class="sheet" id="sheet" hidden>
   <div class="sheet__head">
-    <span id="sheetTitle">Prova rilievo bomboniere · 126 pezzi unici</span>
+    <h1 id="sheetTitle">Prova rilievo bomboniere · 126 pezzi unici</h1>
     <button id="sheetClose" type="button" aria-label="Chiudi">&times;</button>
   </div>
   <div class="sheet__scroll" id="sheetScroll">
@@ -639,6 +642,8 @@
     document.getElementById('sub').textContent = 'Trascina il dito sul quadro';
   }
 
+  // it has said its piece once the hand arrives
+  stage.addEventListener('pointermove', function () { sub.classList.add('gone'); }, { once: true });
   stage.addEventListener('pointermove', aim);
   stage.addEventListener('pointerdown', aim);
 
