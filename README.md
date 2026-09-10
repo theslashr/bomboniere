@@ -32,7 +32,14 @@ Step 1 and 2 run once per painting on the CPU and are cached; doing the band
 pass in the shader would cost about twenty texture reads per pixel per frame,
 against two for a baked map. Roughly 400–900ms per painting at 1280px.
 
-## Views
+## Two builds
+
+- `index.html` — the one to show someone. No controls: the picture, the strip,
+  and settings fixed at what looked right across the whole set.
+- `tuning.html` — the same viewer with the sliders and the view modes back,
+  for changing those settings.
+
+## Views (tuning.html)
 
 - **Dipinto** — the lit surface.
 - **Originale** — the untouched photograph, to A/B what is being added.
