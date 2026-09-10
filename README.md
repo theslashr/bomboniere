@@ -58,11 +58,15 @@ multi-column box with a fixed height does not grow downward, it makes more
 columns and overflows sideways, so `overflow-y` on the columns themselves had
 nothing to scroll.
 
-Scrolling the sheet drags colour across it, in the palette the painter site
-mixes from, laid where the hand is working and dried back a frame at a time.
+The sheet lies under a veil and the cursor wipes it off, so sweeping across
+uncovers the paintings' colour and it closes again behind you — the same move
+the hero makes on the painter site. The colour that appears is the paintings'
+own; nothing is painted on top of them.
+
 Plain alpha, no blend mode — the sheet sits on a `backdrop-filter`, and a
 blended layer over a promoted backdrop is what once turned the other project's
-hero black.
+hero black. Fine pointers only: there is no cursor to wipe with on a phone, and
+a drag there is how the sheet scrolls, so touch gets the sheet unveiled.
 
 The cursor is the painter site's, lifted whole: a ring and a dot, both on the
 real pointer, `mix-blend-mode: difference` so one cursor reads on a near-black

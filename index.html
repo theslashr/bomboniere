@@ -749,8 +749,10 @@
     sheet.hidden = false;
     // let it lay out before the class, or the fade has nothing to move from
     setTimeout(function () {
-      washOn = true; lastScroll = sheetScroll.scrollTop; sizeWash();
-      if (!washRaf) washRaf = requestAnimationFrame(washFrame);
+      if (fine && !reduced) {
+        veilOn = true; vpx = vpy = null; sizeWash();
+        if (!veilRaf) veilRaf = requestAnimationFrame(veilFrame);
+      }
       sheet.classList.add('in');
       var cur = sheetBtns[current];
       if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'center' });
@@ -761,8 +763,8 @@
     sheet.classList.remove('in');
     setTimeout(function () {
       sheet.hidden = true;
-      washOn = false;
-      if (washRaf) { cancelAnimationFrame(washRaf); washRaf = 0; }
+      veilOn = false;
+      if (veilRaf) { cancelAnimationFrame(veilRaf); veilRaf = 0; }
       if (wash.width) wctx.clearRect(0, 0, wash.width, wash.height);
     }, 320);
   }
@@ -807,20 +809,23 @@
     });
   }
 
-  /* ---------------- the wash ----------------
-     Scrolling the sheet drags colour across it, in the palette the painter
-     site mixes from. Pools are laid where the hand is working and then dry
-     back, so a fast flick leaves a wave and a slow read leaves almost nothing.
+  /* ---------------- the veil ----------------
+     The same move the painter site makes with its hero: the sheet lies under
+     a veil and the cursor wipes it off, so sweeping across uncovers the
+     paintings' colour and it closes again behind you. The colour that appears
+     is the paintings' own - nothing is painted on top of them.
+
      Plain alpha, no blend mode: the sheet sits on a backdrop-filter, and a
      blended layer over a promoted backdrop is what turned the other hero
-     black. */
-  var WASH = [
-    [42,166,196], [217,162,39], [216,69,47], [31,122,108],
-    [107,74,158], [194,65,126], [58,108,152]
-  ];
+     black. Fine pointers only - there is no cursor to wipe with on a phone,
+     and a drag there is how the sheet scrolls. */
+  var VEIL = '10,12,16';
+  var VEIL_A = 0.66;      // how far the paintings fall back before the brush
+  var HEAL = 0.014;       // how fast the veil closes again, per frame
+
   var wash = document.getElementById('sheetWash');
   var wctx = wash.getContext('2d');
-  var washOn = false, lastScroll = 0, hue = 0, washRaf = 0;
+  var veilOn = false, veilRaf = 0, vpx = null, vpy = null;
 
   function sizeWash() {
     var r = sheet.getBoundingClientRect();
@@ -829,58 +834,62 @@
     wash.width = Math.round(r.width * dpr);
     wash.height = Math.round(r.height * dpr);
     wctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    wctx.globalCompositeOperation = 'source-over';
+    wctx.fillStyle = 'rgba(' + VEIL + ',' + VEIL_A + ')';
+    wctx.fillRect(0, 0, r.width, r.height);
   }
 
-  function pool(x, y, r, a, col) {
+  /* A soft pool, so the brush has no edge anywhere. */
+  function wipe(x, y, r) {
     var g = wctx.createRadialGradient(x, y, 0, x, y, r);
-    var head = 'rgba(' + col[0] + ',' + col[1] + ',' + col[2] + ',';
-    g.addColorStop(0, head + a + ')');
-    g.addColorStop(0.45, head + (a * 0.55) + ')');
-    g.addColorStop(1, head + '0)');
+    g.addColorStop(0,    'rgba(0,0,0,0.30)');
+    g.addColorStop(0.45, 'rgba(0,0,0,0.17)');
+    g.addColorStop(1,    'rgba(0,0,0,0)');
+    wctx.globalCompositeOperation = 'destination-out';
     wctx.fillStyle = g;
     wctx.beginPath();
     wctx.arc(x, y, r, 0, Math.PI * 2);
     wctx.fill();
+    wctx.globalCompositeOperation = 'source-over';
   }
 
-  function washFrame() {
-    washRaf = 0;
-    if (!washOn) return;
-    var w = wash.width, h = wash.height;
-    if (w && h) {
-      // dry back, so a wave fades rather than accumulating into mud
-      wctx.save();
-      wctx.setTransform(1, 0, 0, 1, 0, 0);
-      wctx.globalCompositeOperation = 'destination-out';
-      wctx.fillStyle = 'rgba(0,0,0,0.055)';
-      wctx.fillRect(0, 0, w, h);
-      wctx.restore();
-      wctx.globalCompositeOperation = 'source-over';
+  function veilStroke(x, y) {
+    if (vpx === null) { vpx = x; vpy = y; }
+    var dx = x - vpx, dy = y - vpy;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    // a quick hand should leave a thinner, longer wash than a slow one
+    var rad = 118 - Math.min(dist, 90) * 0.42;
+    var n = Math.max(1, Math.ceil(dist / 14));
+    for (var i = 1; i <= n; i++) {
+      var t = i / n;
+      wipe(vpx + dx * t, vpy + dy * t, rad);
     }
-    washRaf = requestAnimationFrame(washFrame);
+    vpx = x; vpy = y;
   }
 
-  function washScroll() {
-    var top = sheetScroll.scrollTop;
-    var v = Math.min(Math.abs(top - lastScroll), 160);
-    lastScroll = top;
-    if (v < 2) return;
-
+  function veilFrame() {
+    veilRaf = 0;
+    if (!veilOn) return;
     var r = sheet.getBoundingClientRect();
-    // a band of pools across the width, weighted to where the wave is strongest
-    var n = 1 + Math.round(v / 60);
-    for (var i = 0; i < n; i++) {
-      var col = WASH[(hue + i) % WASH.length];
-      var x = Math.random() * r.width;
-      var y = Math.random() * r.height;
-      var rad = 150 + Math.random() * 230 + v * 2.1;
-      pool(x, y, rad, (0.05 + v / 1500).toFixed(4), col);
+    if (r.width > 1) {
+      // closes back over what was uncovered; already-veiled areas are opaque
+      // and take nothing from this
+      wctx.globalCompositeOperation = 'source-over';
+      wctx.fillStyle = 'rgba(' + VEIL + ',' + HEAL + ')';
+      wctx.fillRect(0, 0, r.width, r.height);
     }
-    hue = (hue + 1) % WASH.length;
+    veilRaf = requestAnimationFrame(veilFrame);
   }
 
-  sheetScroll.addEventListener('scroll', washScroll, { passive: true });
-  window.addEventListener('resize', function () { if (washOn) sizeWash(); });
+  sheet.addEventListener('pointermove', function (e) {
+    if (!veilOn) return;
+    var r = sheet.getBoundingClientRect();
+    veilStroke(e.clientX - r.left, e.clientY - r.top);
+  }, { passive: true });
+
+  // the veil is screen-fixed, so a scroll would smear what is already open
+  sheetScroll.addEventListener('scroll', function () { vpx = vpy = null; }, { passive: true });
+  window.addEventListener('resize', function () { if (veilOn) sizeWash(); });
 
   /* ---------------- draw ---------------- */
   (function frame() {
