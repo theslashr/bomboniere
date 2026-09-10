@@ -61,19 +61,25 @@ nothing to scroll.
 The grid is what opens first — it is the collection, and the viewer is where a
 single painting goes. `#one=1` skips straight to the viewer.
 
-Colour is **added, never taken away**. The cursor lays light over a grid that is
-already at full strength, screen blended so a stroke can only lighten, in the
-palette `paint.js` mixes from, with the nib running dry and reloading so a long
-sweep changes colour as it goes. An earlier attempt hid the grid under a veil
-and wiped it off; that meant the paintings only looked right where the hand had
-been, which is the wrong way round for a page whose whole job is showing them.
+Nothing is painted over the grid. One layer sits above it carrying a mild
+desaturation, masked away around the pointer, so the paintings the hand is near
+keep all their colour and the rest sit back a little: 100% saturation on the
+cursor, 97% one thumbnail across, 81% two away, about 63% in the far corners,
+with brightness barely moving. It is about colour, not darkness.
 
-Two things that had to be true for the blending to be safe: the sheet is solid
-with no `backdrop-filter` (a blended layer over a filtered backdrop is what once
-turned the other project's hero black), and marks are held in a list and
-redrawn each frame rather than accumulated on the canvas, so nothing compounds.
-The veil version healed by repeatedly filling the canvas, which does not settle
-at a target alpha — `source-over` compounds, and the sheet slowly went black.
+The mask centre is two custom properties written straight from the pointer
+event, so it tracks exactly — no easing, no trail, nothing to fall behind. One
+style write per move on one element, rather than a filter recomputed on 126 of
+them.
+
+Two earlier attempts are worth recording as dead ends. A veil over the grid that
+the cursor wiped off meant the paintings only looked right where the hand had
+been, which is backwards for a page whose job is showing them — and it healed by
+refilling the canvas each frame, which compounds under `source-over` rather than
+settling at a target alpha, so the sheet slowly went black. Screen-blended
+colour laid on top read as streaks across half the screen and buried the real
+colours. Both were adding something; what was wanted was taking a little away
+from everything except what you are looking at.
 
 Fine pointers only; on a phone there is no cursor and a drag is how the grid
 scrolls.

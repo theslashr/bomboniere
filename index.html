@@ -101,13 +101,26 @@
   }
 
   /* ---------- the wash the grid picks up as it scrolls ---------- */
-  /* Over the thumbnails and screen blended, so a stroke can only add light.
-     Behind them the only gaps are 13px wide and none of it could be seen. */
-  .sheet__wash{
+  /* A mild desaturation over the whole sheet, masked away around the pointer.
+     Where the mask is transparent the layer is not painted at all, so the
+     paintings under the hand are untouched and the rest sit back a little.
+     Nothing is added on top of the artwork. */
+  .sheet__near{
     position:absolute; inset:0; z-index:3;
     pointer-events:none;
-    mix-blend-mode:screen;
+    opacity:0; transition:opacity .5s var(--ease);
+    /* colour, not darkness: brightness barely moves, saturation does the work */
+    -webkit-backdrop-filter:saturate(.6) brightness(.96);
+    backdrop-filter:saturate(.6) brightness(.96);
+    --mx:50%; --my:50%;
+    /* the core is wide enough to hold a whole thumbnail at full strength,
+       then falls away over the next few */
+    -webkit-mask-image:radial-gradient(circle 420px at var(--mx) var(--my),
+      transparent 0%, transparent 30%, #000 100%);
+    mask-image:radial-gradient(circle 420px at var(--mx) var(--my),
+      transparent 0%, transparent 30%, #000 100%);
   }
+  .sheet__near.on{ opacity:1; }
 
   /* ---------- edition mark ---------- */
   .edition{
@@ -324,7 +337,7 @@
     <span id="sheetTitle">Prova rilievo bomboniere · 126 pezzi unici</span>
     <button id="sheetClose" type="button" aria-label="Chiudi">&times;</button>
   </div>
-  <canvas class="sheet__wash" id="sheetWash" aria-hidden="true"></canvas>
+  <div class="sheet__near" id="sheetNear" aria-hidden="true"></div>
   <div class="sheet__scroll" id="sheetScroll">
     <div class="sheet__grid" id="sheetGrid"></div>
   </div>
@@ -756,10 +769,7 @@
     document.body.classList.add('sheet-open');
     // let it lay out before the class, or the fade has nothing to move from
     setTimeout(function () {
-      if (fine && !reduced) {
-        brushOn = true; vpx = vpy = null; marks.length = 0; sizeWash();
-        if (!brushRaf) brushRaf = requestAnimationFrame(brushFrame);
-      }
+
       sheet.classList.add('in');
       var cur = sheetBtns[current];
       if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'center' });
@@ -771,9 +781,7 @@
     setTimeout(function () {
       sheet.hidden = true;
       document.body.classList.remove('sheet-open');
-      brushOn = false;
-      if (brushRaf) { cancelAnimationFrame(brushRaf); brushRaf = 0; }
-      if (wash.width) wctx.clearRect(0, 0, wash.width, wash.height);
+      near.classList.remove('on');
     }, 320);
   }
 
@@ -819,105 +827,30 @@
     });
   }
 
-  /* ---------------- the brush ----------------
-     Colour is added, never taken away: the grid is at full strength from the
-     moment it opens and the cursor lays light over it. An earlier version hid
-     the sheet under a veil and wiped it off, which meant the paintings only
-     looked right where the hand had been - the wrong way round for a page
-     whose whole job is showing them.
+  /* ---------------- proximity ----------------
+     Nothing is painted over the grid. One layer sits above it carrying a mild
+     desaturation, masked out around the pointer, so the paintings the hand is
+     near are at full strength and the rest sit back a little. The mask centre
+     is two custom properties written straight from the pointer event, so it
+     tracks exactly - no easing, no trail, nothing to fall behind.
 
-     Screen blending, so a stroke can only lighten. The sheet has no
-     backdrop-filter behind it any more, which is what made blending unsafe
-     before. Marks are redrawn from a list each frame rather than accumulated
-     on the canvas, so nothing can compound. */
-  var PAL = [
-    [42,166,196], [217,162,39], [216,69,47], [31,122,108],
-    [107,74,158], [194,65,126], [58,108,152]
-  ];
-  var BRUSH = 130;
-  var MARK_FADE = 0.028;      // a stroke lingers about a second
-  var MAX_MARKS = 110;
+     One style write per move on one element, rather than a filter recomputed
+     on 126 of them. */
+  var near = document.getElementById('sheetNear');
 
-  var wash = document.getElementById('sheetWash');
-  var wctx = wash.getContext('2d');
-  var brushOn = false, brushRaf = 0, vpx = null, vpy = null;
-  var marks = [], nib = 0, nibStep = 0;
-
-  function sizeWash() {
+  function moveNear(e) {
     var r = sheet.getBoundingClientRect();
-    if (r.width < 2 || r.height < 2) return;
-    var dpr = Math.min(window.devicePixelRatio || 1, 2);
-    wash.width = Math.round(r.width * dpr);
-    wash.height = Math.round(r.height * dpr);
-    wctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    near.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+    near.style.setProperty('--my', (e.clientY - r.top) + 'px');
   }
 
-  function lay(m) {
-    var g = wctx.createRadialGradient(m.x, m.y, 0, m.x, m.y, m.r);
-    var head = 'rgba(' + m.c[0] + ',' + m.c[1] + ',' + m.c[2] + ',';
-    var a = m.life * m.a;
-    g.addColorStop(0,    head + a + ')');
-    g.addColorStop(0.42, head + (a * 0.55) + ')');
-    g.addColorStop(1,    head + '0)');
-    wctx.fillStyle = g;
-    wctx.beginPath();
-    wctx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
-    wctx.fill();
+  if (fine && !reduced) {
+    sheet.addEventListener('pointermove', function (e) {
+      moveNear(e);
+      near.classList.add('on');
+    }, { passive: true });
+    sheet.addEventListener('pointerleave', function () { near.classList.remove('on'); });
   }
-
-  function brushStroke(x, y) {
-    if (vpx === null) { vpx = x; vpy = y; }
-    var dx = x - vpx, dy = y - vpy;
-    var dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 1) return;
-
-    // the nib runs dry and reloads, so a long sweep changes colour as it goes
-    nibStep += dist;
-    if (nibStep > 260) { nibStep = 0; nib = (nib + 1) % PAL.length; }
-    var col = PAL[nib];
-
-    var rad = BRUSH - Math.min(dist, 80) * 0.35;
-    var n = Math.max(1, Math.ceil(dist / 18));
-    for (var i = 1; i <= n; i++) {
-      var t = i / n;
-      marks.push({
-        x: vpx + dx * t, y: vpy + dy * t, r: rad, c: col,
-        a: 0.20 + Math.min(dist, 60) / 480, life: 1
-      });
-    }
-    if (marks.length > MAX_MARKS) marks.splice(0, marks.length - MAX_MARKS);
-    // lay it now rather than waiting for the next frame: the hand should not
-    // have to outrun the animation loop, and rAF stops in a background tab.
-    // The frame redraws the whole list anyway, so this cannot double up.
-    for (var j = marks.length - n; j < marks.length; j++) if (marks[j]) lay(marks[j]);
-    vpx = x; vpy = y;
-  }
-
-  function brushFrame() {
-    brushRaf = 0;
-    if (!brushOn) return;
-    var r = sheet.getBoundingClientRect();
-    if (r.width > 1) {
-      wctx.clearRect(0, 0, r.width, r.height);
-      for (var i = marks.length - 1; i >= 0; i--) {
-        marks[i].life -= MARK_FADE;
-        if (marks[i].life <= 0) { marks.splice(i, 1); continue; }
-        lay(marks[i]);
-      }
-    }
-    brushRaf = requestAnimationFrame(brushFrame);
-  }
-
-  sheet.addEventListener('pointermove', function (e) {
-    if (!brushOn) return;
-    var r = sheet.getBoundingClientRect();
-    brushStroke(e.clientX - r.left, e.clientY - r.top);
-  }, { passive: true });
-
-  // the canvas is screen-fixed, so a scroll would smear the stroke sideways
-  sheetScroll.addEventListener('scroll', function () { vpx = vpy = null; }, { passive: true });
-  sheet.addEventListener('pointerleave', function () { vpx = vpy = null; });
-  window.addEventListener('resize', function () { if (brushOn) sizeWash(); });
 
   /* ---------------- draw ---------------- */
   (function frame() {
