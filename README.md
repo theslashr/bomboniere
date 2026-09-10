@@ -48,6 +48,26 @@ then by number within it. The file name *is* the edition number, so there is no
 table to keep in step. To add or reorder anything, re-derive the whole sequence
 the same way rather than renaming a file by hand.
 
+## The sheet
+
+The thumbnails are laid out in **columns, not grid**. Grid has to size a row
+track before it can place anything in it, and an image at `width:100%`
+contributes no height to that pass, so every row collapsed and the paintings
+were clipped into ribbons. Columns also need a wrapper to do the scrolling: a
+multi-column box with a fixed height does not grow downward, it makes more
+columns and overflows sideways, so `overflow-y` on the columns themselves had
+nothing to scroll.
+
+Scrolling the sheet drags colour across it, in the palette the painter site
+mixes from, laid where the hand is working and dried back a frame at a time.
+Plain alpha, no blend mode — the sheet sits on a `backdrop-filter`, and a
+blended layer over a promoted backdrop is what once turned the other project's
+hero black.
+
+The cursor is the painter site's, lifted whole: a ring and a dot, both on the
+real pointer, `mix-blend-mode: difference` so one cursor reads on a near-black
+wall and on a bright painting without changing colour.
+
 ## Memory
 
 Each painting held in the cache costs roughly 8MB — a normal map canvas and its

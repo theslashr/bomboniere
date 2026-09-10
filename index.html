@@ -65,6 +65,50 @@
     box-shadow:inset 0 0 0 1px rgba(255,252,244,.10); border-radius:inherit;
   }
 
+  /* ---------- cursor, the same one the painter site uses ----------
+     difference blending is what makes one cursor read on both a near-black
+     wall and a bright painting without ever changing colour. */
+  .brush-cursor{
+    position:fixed; top:0; left:0; z-index:120;
+    pointer-events:none; opacity:0;
+    transform:translate(-50%,-50%);
+    transition:opacity .3s;
+    mix-blend-mode:difference;
+  }
+  .brush-cursor svg{ display:block; overflow:visible; }
+  .brush-dot{
+    position:fixed; top:0; left:0; z-index:121;
+    pointer-events:none; opacity:0;
+    transform:translate(-50%,-50%);
+    transition:opacity .3s;
+    mix-blend-mode:difference;
+  }
+  .brush-dot svg{ display:block; }
+  .bc-ring{
+    fill:none; stroke:#fff; stroke-width:1.25; opacity:.65;
+    transform-origin:center; transition:transform .3s var(--ease);
+  }
+  .bc-dot{ fill:#fff; }
+  body.has-cursor .brush-cursor,
+  body.has-cursor .brush-dot{ opacity:1; }
+  body.has-cursor .brush-cursor.on svg{ transform:scale(1.7); }
+
+  @media (hover:hover) and (pointer:fine){
+    body.has-cursor,
+    body.has-cursor a,
+    body.has-cursor button,
+    body.has-cursor .plate{ cursor:none; }
+  }
+
+  /* ---------- the wash the grid picks up as it scrolls ---------- */
+  /* Over the thumbnails, not behind them: behind, the only gaps are 13px wide
+     and the wave was invisible. It stays weak and dries back fast, so it reads
+     as light moving across the sheet rather than a film over the paintings. */
+  .sheet__wash{
+    position:absolute; inset:0; z-index:3;
+    pointer-events:none;
+  }
+
   /* ---------- edition mark ---------- */
   .edition{
     display:flex; align-items:baseline; justify-content:center; gap:.42rem;
@@ -179,8 +223,16 @@
      out of buttons that clipped them. Columns have no track step at all - the
      column width is definite up front - and they give a masonry flow, which
      suits a set of mixed shapes better than a ragged grid would. */
-  .sheet__grid{
+  /* The scroller has to be the wrapper, not the columns. A multi-column box
+     with a fixed height does not grow downward: it makes more columns and
+     overflows sideways, so overflow-y had nothing to scroll and the far
+     columns were simply cut off. Given auto height it balances and grows, and
+     the wrapper scrolls it. */
+  .sheet__scroll{
     flex:1 1 auto; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    position:relative; z-index:2;
+  }
+  .sheet__grid{
     column-width:clamp(78px,11vw,124px);
     column-gap:clamp(.5rem,1.4vw,.85rem);
     padding:clamp(1rem,3vw,1.8rem) clamp(1rem,4vw,2.4rem) clamp(2rem,5vw,3rem);
@@ -236,6 +288,17 @@
 <h1>Prova rilievo bomboniere</h1>
 <p class="sub" id="sub">Muovi il puntatore sul quadro</p>
 
+<div class="brush-cursor" id="brushCursor" aria-hidden="true">
+  <svg viewBox="0 0 40 40" width="40" height="40">
+    <circle class="bc-ring" cx="20" cy="20" r="14"/>
+  </svg>
+</div>
+<div class="brush-dot" id="brushDot" aria-hidden="true">
+  <svg viewBox="0 0 12 12" width="12" height="12">
+    <circle class="bc-dot" cx="6" cy="6" r="3.5"/>
+  </svg>
+</div>
+
 <div class="stage" id="stage">
   <div class="plate" id="plate"><canvas id="gl"></canvas></div>
 </div>
@@ -255,7 +318,10 @@
     <span id="sheetTitle">126 pezzi unici</span>
     <button id="sheetClose" type="button" aria-label="Chiudi">&times;</button>
   </div>
-  <div class="sheet__grid" id="sheetGrid"></div>
+  <canvas class="sheet__wash" id="sheetWash" aria-hidden="true"></canvas>
+  <div class="sheet__scroll" id="sheetScroll">
+    <div class="sheet__grid" id="sheetGrid"></div>
+  </div>
 </div>
 
 <p class="err" id="err" hidden></p>
@@ -650,6 +716,7 @@
      costs nothing until it is wanted. */
   var sheet = document.getElementById('sheet');
   var sheetGrid = document.getElementById('sheetGrid');
+  var sheetScroll = document.getElementById('sheetScroll');
   var sheetBtns = null;
 
   function buildSheet() {
@@ -682,6 +749,8 @@
     sheet.hidden = false;
     // let it lay out before the class, or the fade has nothing to move from
     setTimeout(function () {
+      washOn = true; lastScroll = sheetScroll.scrollTop; sizeWash();
+      if (!washRaf) washRaf = requestAnimationFrame(washFrame);
       sheet.classList.add('in');
       var cur = sheetBtns[current];
       if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'center' });
@@ -690,7 +759,12 @@
 
   function closeSheet() {
     sheet.classList.remove('in');
-    setTimeout(function () { sheet.hidden = true; }, 320);
+    setTimeout(function () {
+      sheet.hidden = true;
+      washOn = false;
+      if (washRaf) { cancelAnimationFrame(washRaf); washRaf = 0; }
+      if (wash.width) wctx.clearRect(0, 0, wash.width, wash.height);
+    }, 320);
   }
 
   document.getElementById('allBtn').addEventListener('click', openSheet);
@@ -705,6 +779,108 @@
 
   select(hashArt >= 0 && hashArt < ART.length ? hashArt : 0);
   if (hashAll) setTimeout(openSheet, 400);   // #all=1 opens straight to the grid
+
+  /* ---------------- cursor ----------------
+     Lifted from the painter site so the two feel like one thing. Both halves
+     ride the real pointer; the ring grows over anything clickable. */
+  var fine = matchMedia('(hover: hover) and (pointer: fine)').matches;
+  var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var cur = document.getElementById('brushCursor');
+  var dot = document.getElementById('brushDot');
+  var cx = 0, cy = 0;
+
+  if (fine && !reduced) {
+    document.body.classList.add('has-cursor');
+    window.addEventListener('pointermove', function (e) {
+      cx = e.clientX; cy = e.clientY;
+      var t = 'translate(' + cx + 'px,' + cy + 'px) translate(-50%,-50%)';
+      cur.style.transform = t;
+      dot.style.transform = t;
+    }, { passive: true });
+
+    // one delegated pair rather than a listener per thumbnail
+    document.addEventListener('pointerover', function (e) {
+      if (e.target.closest && e.target.closest('button, a, .plate')) cur.classList.add('on');
+    });
+    document.addEventListener('pointerout', function (e) {
+      if (e.target.closest && e.target.closest('button, a, .plate')) cur.classList.remove('on');
+    });
+  }
+
+  /* ---------------- the wash ----------------
+     Scrolling the sheet drags colour across it, in the palette the painter
+     site mixes from. Pools are laid where the hand is working and then dry
+     back, so a fast flick leaves a wave and a slow read leaves almost nothing.
+     Plain alpha, no blend mode: the sheet sits on a backdrop-filter, and a
+     blended layer over a promoted backdrop is what turned the other hero
+     black. */
+  var WASH = [
+    [42,166,196], [217,162,39], [216,69,47], [31,122,108],
+    [107,74,158], [194,65,126], [58,108,152]
+  ];
+  var wash = document.getElementById('sheetWash');
+  var wctx = wash.getContext('2d');
+  var washOn = false, lastScroll = 0, hue = 0, washRaf = 0;
+
+  function sizeWash() {
+    var r = sheet.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    wash.width = Math.round(r.width * dpr);
+    wash.height = Math.round(r.height * dpr);
+    wctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function pool(x, y, r, a, col) {
+    var g = wctx.createRadialGradient(x, y, 0, x, y, r);
+    var head = 'rgba(' + col[0] + ',' + col[1] + ',' + col[2] + ',';
+    g.addColorStop(0, head + a + ')');
+    g.addColorStop(0.45, head + (a * 0.55) + ')');
+    g.addColorStop(1, head + '0)');
+    wctx.fillStyle = g;
+    wctx.beginPath();
+    wctx.arc(x, y, r, 0, Math.PI * 2);
+    wctx.fill();
+  }
+
+  function washFrame() {
+    washRaf = 0;
+    if (!washOn) return;
+    var w = wash.width, h = wash.height;
+    if (w && h) {
+      // dry back, so a wave fades rather than accumulating into mud
+      wctx.save();
+      wctx.setTransform(1, 0, 0, 1, 0, 0);
+      wctx.globalCompositeOperation = 'destination-out';
+      wctx.fillStyle = 'rgba(0,0,0,0.055)';
+      wctx.fillRect(0, 0, w, h);
+      wctx.restore();
+      wctx.globalCompositeOperation = 'source-over';
+    }
+    washRaf = requestAnimationFrame(washFrame);
+  }
+
+  function washScroll() {
+    var top = sheetScroll.scrollTop;
+    var v = Math.min(Math.abs(top - lastScroll), 160);
+    lastScroll = top;
+    if (v < 2) return;
+
+    var r = sheet.getBoundingClientRect();
+    // a band of pools across the width, weighted to where the wave is strongest
+    var n = 1 + Math.round(v / 60);
+    for (var i = 0; i < n; i++) {
+      var col = WASH[(hue + i) % WASH.length];
+      var x = Math.random() * r.width;
+      var y = Math.random() * r.height;
+      var rad = 150 + Math.random() * 230 + v * 2.1;
+      pool(x, y, rad, (0.05 + v / 1500).toFixed(4), col);
+    }
+    hue = (hue + 1) % WASH.length;
+  }
+
+  sheetScroll.addEventListener('scroll', washScroll, { passive: true });
+  window.addEventListener('resize', function () { if (washOn) sizeWash(); });
 
   /* ---------------- draw ---------------- */
   (function frame() {
