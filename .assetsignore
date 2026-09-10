@@ -1,0 +1,7 @@
+# Cloudflare uploads the assets directory, which here is the repo root, so the
+# git directory went with it: one pack file is larger than the 25 MiB per-file
+# limit and the whole deploy failed. None of this belongs on the CDN anyway.
+.git
+.gitignore
+.assetsignore
+README.md
