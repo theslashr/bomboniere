@@ -300,10 +300,10 @@
      reads as plastic. tuning.html is the same viewer with the sliders back. */
   var RELIEF = 3.2, GLOSS = 91.0, SPEC = 0.52, TILT = 4.3;
 
-  /* A phone shows the picture far smaller, so the same rotation reads as less
-     of a movement. A tenth more brings it back to what it looks like on a
-     desktop. Only the plate rotates further; the light keeps its range. */
-  if (matchMedia('(hover: none)').matches) TILT *= 1.1;
+  /* A phone shows the picture far smaller, so the same rotation reads as far
+     less of a movement. A fifth more makes up for it. Only the plate turns
+     further; the light keeps the range it already had. */
+  if (matchMedia('(hover: none)').matches) TILT *= 1.2;
   var current = -1, ready = false;
   var hashArt = -1;
 
