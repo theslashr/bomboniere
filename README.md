@@ -32,6 +32,24 @@ Step 1 and 2 run once per painting on the CPU and are cached; doing the band
 pass in the shader would cost about twenty texture reads per pixel per frame,
 against two for a baked map. Roughly 400–900ms per painting at 1280px.
 
+## Numbering
+
+Each painting is one of a kind, shown as `NN / 126`.
+
+The numbers are **not** the ones in the file names. Telegram exported the set in
+two batches and restarted counting in each, so of 126 files there are only 95
+distinct `photo_N` numbers, 31 of them used by two different paintings, and the
+highest is 97 — nothing would ever be numbered 98 to 126. Calling a piece
+"11 / 126" on that basis would be a false claim about a unique work.
+
+`NUM` in `index.html` instead holds a canonical index, from sorting all 126 by
+batch and then by number within it. Every painting gets exactly one number in
+range. It happens to agree with the file name for the earlier pieces and drift
+after that: `p46` is 45, `p97` is 95.
+
+If more paintings are added to the viewer, get their numbers the same way
+rather than reading them off a file name.
+
 ## Two builds
 
 - `index.html` — the one to show someone. No controls: the picture, the strip,

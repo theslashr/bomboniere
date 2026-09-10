@@ -49,23 +49,60 @@
     box-shadow:inset 0 0 0 1px rgba(255,252,244,.10); border-radius:inherit;
   }
 
-  /* ---------- filmstrip ---------- */
-  .strip{
-    display:flex; gap:.5rem;
-    width:max-content; max-width:100%;
-    margin:clamp(1.4rem,4vw,2.2rem) auto 0;
-    overflow-x:auto; padding:.25rem .2rem .5rem;
-    scrollbar-width:thin;
+  /* ---------- edition mark ---------- */
+  .edition{
+    display:flex; align-items:baseline; justify-content:center; gap:.42rem;
+    margin:clamp(1.1rem,3vw,1.6rem) 0 0;
+    font-variant-numeric:tabular-nums; line-height:1;
+    opacity:0; transform:translateY(4px);
+    transition:opacity .5s var(--ease), transform .5s var(--ease);
   }
+  .edition.in{ opacity:1; transform:none; }
+  .edition .n{
+    font-size:clamp(1.5rem,3.4vw,2.15rem); font-weight:300;
+    letter-spacing:.02em; color:var(--canvas);
+  }
+  .edition .sep{ font-size:1rem; color:#4a4e55; font-weight:300; }
+  .edition .tot{ font-size:.82rem; color:var(--muted); letter-spacing:.13em; }
+  .edition .uniq{
+    margin-left:.55rem; padding-left:.7rem; font-size:.62rem; letter-spacing:.18em;
+    text-transform:uppercase; color:#5f646b; border-left:1px solid rgba(255,255,255,.13);
+    align-self:center;
+  }
+
+  /* ---------- rail ---------- */
+  .strip{
+    display:flex; gap:.55rem; align-items:center;
+    width:max-content; max-width:100%;
+    margin:clamp(1rem,3vw,1.7rem) auto 0;
+    overflow-x:auto; overflow-y:hidden;
+    padding:.9rem .9rem 1rem;
+    scrollbar-width:none;
+    /* the ends fall away rather than being sliced off mid-thumbnail */
+    -webkit-mask-image:linear-gradient(to right, transparent, #000 34px, #000 calc(100% - 34px), transparent);
+    mask-image:linear-gradient(to right, transparent, #000 34px, #000 calc(100% - 34px), transparent);
+  }
+  .strip::-webkit-scrollbar{ display:none; }
   .strip button{
     flex:0 0 auto; padding:0; border:0; background:none; cursor:pointer;
-    border-radius:2px; overflow:hidden; line-height:0;
-    outline:1px solid rgba(255,255,255,.12); outline-offset:0;
-    opacity:.55; transition:opacity .25s var(--ease), outline-color .25s var(--ease);
+    border-radius:2px; line-height:0; position:relative;
+    opacity:.5; filter:saturate(.7); transform:scale(.92);
+    transition:opacity .45s var(--ease), transform .45s var(--ease),
+               filter .45s var(--ease), box-shadow .45s var(--ease);
   }
-  .strip button:hover{ opacity:.85; }
-  .strip button[aria-current="true"]{ opacity:1; outline:2px solid var(--ochre); }
-  .strip img{ display:block; height:clamp(58px,8vw,80px); width:auto; }
+  .strip button:hover{ opacity:.85; filter:saturate(.95); transform:scale(.97); }
+  .strip button[aria-current="true"]{
+    opacity:1; filter:none; transform:scale(1.1);
+    box-shadow:0 12px 22px -10px rgba(0,0,0,.9);
+  }
+  /* a hairline only the current one wears */
+  .strip button::after{
+    content:""; position:absolute; inset:0; border-radius:inherit;
+    box-shadow:inset 0 0 0 1px rgba(255,252,244,.16);
+    opacity:0; transition:opacity .45s var(--ease);
+  }
+  .strip button[aria-current="true"]::after{ opacity:1; box-shadow:inset 0 0 0 1px var(--ochre); }
+  .strip img{ display:block; height:clamp(54px,7.4vw,76px); width:auto; border-radius:2px; }
 
   /* ---------- controls ---------- */
   .panel{ margin-top:1rem; width:min(100%,540px); display:grid; gap:.7rem; font-size:.76rem; color:var(--muted); }
@@ -89,6 +126,17 @@
   .seg button[aria-pressed="true"]{ background:var(--ochre); color:var(--ink); }
 
   .err{ color:#e08b7a; }
+
+  /* The stage refuses to scroll the page, because a drag across it is aiming
+     the light. So on a short screen everything has to fit, or the biggest
+     region on the display becomes the one place a swipe does nothing. */
+  @media (max-height:760px){
+    .stage{ min-height:min(52svh,500px); }
+    .plate canvas{ max-height:min(52svh,500px); }
+    .edition{ margin-top:.85rem; }
+    .strip{ margin-top:.7rem; padding-top:.7rem; padding-bottom:.7rem; }
+    h1{ font-size:clamp(1rem,2.6vw,1.5rem); }
+  }
   kbd{ font:inherit; background:rgba(255,255,255,.09); border-radius:3px; padding:0 .3em; }
 </style>
 </head>
@@ -101,6 +149,13 @@
   <div class="plate" id="plate"><canvas id="gl"></canvas></div>
 </div>
 
+<div class="edition" id="edition" aria-live="polite">
+  <span class="n"  id="edNum">—</span>
+  <span class="sep">/</span>
+  <span class="tot" id="edTot">126</span>
+  <span class="uniq">pezzo unico</span>
+</div>
+
 <div class="strip" id="strip"></div>
 
 <p class="err" id="err" hidden></p>
@@ -111,11 +166,22 @@
 
   var ART = ['p1','p11','p16','p20','p28','p32','p40','p46','p59','p62','p67','p76','p92','p97'];
 
+  /* Which of the 126 each one is. Not taken from the file names: Telegram
+     exported in two batches and restarted numbering, so 31 numbers are used
+     twice and none goes past 97. These come from sorting the whole set by
+     batch and then by number, which gives every painting one number in range. */
+  var TOTAL = 126;
+  var NUM = { p1:1, p11:11, p16:16, p20:20, p28:28, p32:32, p40:40,
+              p46:45, p59:58, p62:61, p67:66, p76:74, p92:90, p97:95 };
+
   var cv = document.getElementById('gl');
   var plate = document.getElementById('plate');
   var stage = document.getElementById('stage');
   var strip = document.getElementById('strip');
   var err  = document.getElementById('err');
+  var edition = document.getElementById('edition');
+  var edNum   = document.getElementById('edNum');
+  document.getElementById('edTot').textContent = String(TOTAL);
 
   function fail(msg) { err.hidden = false; err.textContent = msg; }
 
@@ -376,32 +442,56 @@
   });
   var stripBtns = strip.querySelectorAll('button');
 
+  function markStrip(i) {
+    stripBtns.forEach(function (b, j) {
+      var on = i === j;
+      b.setAttribute('aria-current', String(on));
+      if (on && b.scrollIntoView) {
+        // keep the current one in the rail without dragging the page with it
+        b.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      }
+    });
+  }
+
+  function setEdition(i) {
+    var n = NUM[ART[i]];
+    edNum.textContent = n < 10 ? '0' + n : String(n);
+    edition.classList.remove('in');
+    // let the removal land before adding it back, so the mark plays again
+    setTimeout(function () { edition.classList.add('in'); }, 30);
+  }
+
   function select(i) {
     if (i === current) return;
     current = i;
-    stripBtns.forEach(function (b, j) { b.setAttribute('aria-current', String(i === j)); });
+    markStrip(i);
+    setEdition(i);
+
     var name = ART[i];
+    var warm = !!cache[name];
+    plate.classList.add('busy');          // fade the picture out first
 
-    if (cache[name]) { apply(cache[name]); return; }
-
-    plate.classList.add('busy');
-    var img = new Image();
-    img.onload = function () {
-      /* Let the busy state paint before the synchronous build blocks the
-         thread. A timer, not rAF: rAF stops in a background tab, and the
-         load would sit at "calcolo" until the tab came forward again. */
-      setTimeout(function () {
-        var nm = buildNormalMap(img);
-        nm.img = img;
-        cache[name] = nm;
-        apply(nm);
-      }, 24);
-    };
-    img.onerror = function () {
-      plate.classList.remove('busy');
-      fail('Immagine non caricata: ' + name);
-    };
-    img.src = 'img/full/' + name + '.jpg';
+    /* Wait for the fade before the build, which blocks the thread for the best
+       part of a second: starting it early would freeze the fade halfway. A
+       timer, not rAF, because rAF stops in a background tab and the load would
+       sit there until the tab came forward again. */
+    setTimeout(function () {
+      if (cache[name]) { apply(cache[name]); return; }
+      var img = new Image();
+      img.onload = function () {
+        setTimeout(function () {
+          var nm = buildNormalMap(img);
+          nm.img = img;
+          cache[name] = nm;
+          apply(nm);
+        }, 16);
+      };
+      img.onerror = function () {
+        plate.classList.remove('busy');
+        fail('Immagine non caricata: ' + name);
+      };
+      img.src = 'img/full/' + name + '.jpg';
+    }, warm ? 200 : 340);
   }
 
   function apply(nm) {
