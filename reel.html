@@ -244,10 +244,29 @@
 
   /* After the rules they override, not before: equal specificity means source
      order decides, and above the rail block these did nothing at all.
-     Below 901 the arc has nowhere to live, so the rail takes over. */
+
+     A vertical arc needs horizontal room a phone has not got. Laid flat along
+     the bottom it needs vertical room, which a phone has plenty of - so the
+     arc comes to mobile rotated a quarter turn rather than being dropped for
+     the rail. Everything the desktop layout sets for a side-by-side pair has
+     to be undone here. */
   @media (max-width:900px){
-    .viewer{ display:block; }
-    .reel{ display:none; }
+    .viewer{
+      display:flex; flex-direction:column-reverse; align-items:center;
+      gap:clamp(.6rem,2vw,1rem); width:100%;
+    }
+    .show{ width:100%; }
+    .show .stage{ justify-content:center; }
+    .show .edition{ justify-content:center; }
+    .reel{
+      width:100%; height:clamp(120px,17svh,168px);
+      -webkit-mask-image:linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+      mask-image:linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+      touch-action:pan-x;
+    }
+    /* the ellipse hangs below the strip, so the arc bulges upward */
+    .reel button{ left:50%; top:100%; }
+    .strip{ display:none; }
   }
   @media (min-width:901px){
     .strip{ display:none; }
@@ -970,12 +989,19 @@
     startReel();
   }
 
+  function isFlat() { return window.matchMedia('(max-width:900px)').matches; }
+
   function layoutReel() {
     if (!reelCards.length) return;
     var w = reel.clientWidth, h = reel.clientHeight;
     if (w < 2 || h < 2) return;
-    var rx = Math.max(40, w - CARD_W * 0.62);
-    var ry = h * 0.40;
+    var flat = isFlat();
+    var cw = flat ? CARD_W * 0.66 : CARD_W;
+    var ch = flat ? CARD_H * 0.66 : CARD_H;
+    // upright: the ellipse sits on the left edge and bulges right.
+    // flat: it hangs below the strip and bulges up.
+    var rx = flat ? w * 0.46 : Math.max(40, w - cw * 0.62);
+    var ry = flat ? h * 0.78 : h * 0.40;
     var step = (Math.PI * 2) / SLOTS;
     var base = Math.round(pos), frac = pos - base;
 
@@ -997,11 +1023,16 @@
       var c = Math.cos(th), sn = Math.sin(th);
       var sc = MIN_SCALE + (1 - MIN_SCALE) * ((c + 1) / 2);
       var el = reelCards[j];
-      el.style.width = CARD_W + 'px';
-      el.style.height = CARD_H + 'px';
+      el.style.width = cw + 'px';
+      el.style.height = ch + 'px';
+      // cos still does the sizing and stacking either way; only which axis it
+      // places along changes, so the front card is rightmost upright and
+      // topmost flat
+      var px = flat ? sn * rx : c * rx;
+      var py = flat ? -c * ry : sn * ry;
       el.style.transform =
-        'translate(' + (c * rx - CARD_W / 2).toFixed(1) + 'px,' +
-        (sn * ry - CARD_H / 2).toFixed(1) + 'px) scale(' + sc.toFixed(3) + ')';
+        'translate(' + (px - cw / 2).toFixed(1) + 'px,' +
+        (py - ch / 2).toFixed(1) + 'px) scale(' + sc.toFixed(3) + ')';
       el.style.zIndex = String(Math.round(sc * 1000));
       var t = (c + 1) / 2;
       el.style.opacity = (0.32 + 0.68 * t).toFixed(3);
@@ -1036,20 +1067,21 @@
     reelBase = -1;
     layoutReel();
     reel.addEventListener('pointerdown', function (e) {
-      downY = dragY = e.clientY; downId = e.pointerId;
+      downY = dragY = isFlat() ? e.clientX : e.clientY; downId = e.pointerId;
       moved = false; dragging = false;
     });
     reel.addEventListener('pointermove', function (e) {
       if (downId === null || e.pointerId !== downId) return;
-      if (!moved && Math.abs(e.clientY - downY) > 4) {
+      var v = isFlat() ? e.clientX : e.clientY;
+      if (!moved && Math.abs(v - downY) > 4) {
         moved = dragging = true;
         // taken now, not on pointerdown: capturing up front makes the reel the
         // click target and a card can never be clicked at all
         if (reel.setPointerCapture) reel.setPointerCapture(e.pointerId);
       }
       if (!dragging) return;
-      var dy = e.clientY - dragY;
-      dragY = e.clientY;
+      var dy = v - dragY;
+      dragY = v;
       posTarget += dy * 0.012;
       pos += dy * 0.012;          // follow the hand exactly while it is down
       layoutReel();
