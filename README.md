@@ -63,7 +63,7 @@ single painting goes. `#one=1` skips straight to the viewer.
 
 Nothing is painted over the grid. Every painting carries how lit it is, 0 to 1,
 and the CSS turns that into saturation. Light comes from the pointer and from
-three drifts on a roughly six second cycle, so the grid keeps moving when nobody
+three drifts on a nine to fifteen second cycle, so the grid keeps moving when nobody
 is touching it.
 
 Lit goes **past** normal rather than back to it — `saturate(1.20)` and
