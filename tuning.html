@@ -376,10 +376,20 @@
     } else { startMotion(); }
   });
 
+  /* The light is normalised to the picture, so edge to edge across it gives
+     only +-1. The rest of the range used to come from the margin of stage
+     around the picture, which on a phone is zero: the plate fills the stage,
+     so the effect capped at 1.0 there against 1.2-1.4 on a desktop. The gain
+     makes a drag across the picture itself cover the whole range, so it
+     behaves the same however much room happens to surround it. */
+  var AIM_GAIN = 1.4;
+
   function aim(e) {
     var r = plate.getBoundingClientRect();
-    tlx = Math.max(-1.4, Math.min(1.4, ((e.clientX - r.left) / r.width) * 2 - 1));
-    tly = Math.max(-1.4, Math.min(1.4, ((e.clientY - r.top) / r.height) * 2 - 1));
+    var nx = (((e.clientX - r.left) / r.width) * 2 - 1) * AIM_GAIN;
+    var ny = (((e.clientY - r.top) / r.height) * 2 - 1) * AIM_GAIN;
+    tlx = Math.max(-1.4, Math.min(1.4, nx));
+    tly = Math.max(-1.4, Math.min(1.4, ny));
   }
   stage.addEventListener('pointermove', aim);
   stage.addEventListener('pointerdown', aim);
