@@ -34,26 +34,33 @@ against two for a baked map. Roughly 400–900ms per painting at 1280px.
 
 ## Numbering
 
-Each painting is one of a kind, shown as `NN / 126`.
+All 126 are in the viewer, each shown as `NN / 126`, one of a kind.
 
-The numbers are **not** the ones in the file names. Telegram exported the set in
-two batches and restarted counting in each, so of 126 files there are only 95
-distinct `photo_N` numbers, 31 of them used by two different paintings, and the
-highest is 97 — nothing would ever be numbered 98 to 126. Calling a piece
-"11 / 126" on that basis would be a false claim about a unique work.
+The numbers are **not** the ones in the original file names. Telegram exported
+the set in two batches and restarted counting in each, so of 126 files there
+were only 95 distinct `photo_N` numbers, 31 of them used by two different
+paintings, and the highest was 97 — nothing would ever have been numbered 98 to
+126. Calling a piece "11 / 126" on that basis would be a false claim about a
+unique work.
 
-`NUM` in `index.html` instead holds a canonical index, from sorting all 126 by
-batch and then by number within it. Every painting gets exactly one number in
-range. It happens to agree with the file name for the earlier pieces and drift
-after that: `p46` is 45, `p97` is 95.
+The images are therefore stored as `n001.jpg` … `n126.jpg`, sorted by batch and
+then by number within it. The file name *is* the edition number, so there is no
+table to keep in step. To add or reorder anything, re-derive the whole sequence
+the same way rather than renaming a file by hand.
 
-If more paintings are added to the viewer, get their numbers the same way
-rather than reading them off a file name.
+## Memory
+
+Each painting held in the cache costs roughly 8MB — a normal map canvas and its
+decoded source. Unbounded that is about a gigabyte across the full set and a
+dead tab on a phone, so `CACHE_MAX` keeps only the last few and shrinks the
+canvas backing store of the ones it drops.
 
 ## Two builds
 
-- `index.html` — the one to show someone. No controls: the picture, the strip,
-  and settings fixed at what looked right across the whole set.
+- `index.html` — the one to show someone. No controls: the picture, the rail,
+  and settings fixed at what looked right across the whole set. **Vedi tutte le
+  126** opens every piece as a masonry sheet to jump anywhere; the rail is for
+  browsing what is nearby.
 - `tuning.html` — the same viewer with the sliders and the view modes back,
   for changing those settings.
 
@@ -88,4 +95,5 @@ Handy for linking a setup or taking screenshots:
 | `#i=12` | which painting, by index |
 | `#lx=-0.8&ly=-0.4` | park the light |
 | `#t=0` | pin the plate flat |
-| `#m=2` | view mode: 0 lit, 1 original, 2 relief |
+| `#m=2` | view mode: 0 lit, 1 original, 2 relief (tuning.html) |
+| `#all=1` | open straight to the sheet of all 126 |
