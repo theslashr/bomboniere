@@ -63,9 +63,15 @@ single painting goes. `#one=1` skips straight to the viewer.
 
 Nothing is painted over the grid. Every painting carries how lit it is, 0 to 1,
 and the CSS turns that into saturation. Light comes from the pointer and from
-three drifts on a roughly seventeen second cycle, so the grid keeps moving when
-nobody is touching it rather than sitting dead everywhere the cursor is not:
-with the pointer off-screen entirely, half the visible cards sit above 0.5.
+three drifts on a roughly six second cycle, so the grid keeps moving when nobody
+is touching it.
+
+Lit goes **past** normal rather than back to it — `saturate(1.20)` and
+`brightness(1.12)` against a floor of `saturate(.58) brightness(.93)`. A card
+that merely stops being dim does not read as anything passing over it;
+brightness is what makes a wave visible. The waves are also tighter than the
+hand's reach, 360px against 620: at 620 they covered most of the screen at once,
+so everything brightened together and nothing appeared to move.
 
 The falloff is a smoothstep, not a square. Squared put a card one thumbnail out
 at half lit and two out at a quarter, which read as only the card under the
