@@ -58,15 +58,25 @@ multi-column box with a fixed height does not grow downward, it makes more
 columns and overflows sideways, so `overflow-y` on the columns themselves had
 nothing to scroll.
 
-The sheet lies under a veil and the cursor wipes it off, so sweeping across
-uncovers the paintings' colour and it closes again behind you — the same move
-the hero makes on the painter site. The colour that appears is the paintings'
-own; nothing is painted on top of them.
+The grid is what opens first — it is the collection, and the viewer is where a
+single painting goes. `#one=1` skips straight to the viewer.
 
-Plain alpha, no blend mode — the sheet sits on a `backdrop-filter`, and a
-blended layer over a promoted backdrop is what once turned the other project's
-hero black. Fine pointers only: there is no cursor to wipe with on a phone, and
-a drag there is how the sheet scrolls, so touch gets the sheet unveiled.
+Colour is **added, never taken away**. The cursor lays light over a grid that is
+already at full strength, screen blended so a stroke can only lighten, in the
+palette `paint.js` mixes from, with the nib running dry and reloading so a long
+sweep changes colour as it goes. An earlier attempt hid the grid under a veil
+and wiped it off; that meant the paintings only looked right where the hand had
+been, which is the wrong way round for a page whose whole job is showing them.
+
+Two things that had to be true for the blending to be safe: the sheet is solid
+with no `backdrop-filter` (a blended layer over a filtered backdrop is what once
+turned the other project's hero black), and marks are held in a list and
+redrawn each frame rather than accumulated on the canvas, so nothing compounds.
+The veil version healed by repeatedly filling the canvas, which does not settle
+at a target alpha — `source-over` compounds, and the sheet slowly went black.
+
+Fine pointers only; on a phone there is no cursor and a drag is how the grid
+scrolls.
 
 The cursor is the painter site's, lifted whole: a ring and a dot, both on the
 real pointer, `mix-blend-mode: difference` so one cursor reads on a near-black

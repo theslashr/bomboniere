@@ -101,12 +101,12 @@
   }
 
   /* ---------- the wash the grid picks up as it scrolls ---------- */
-  /* Over the thumbnails, not behind them: behind, the only gaps are 13px wide
-     and the wave was invisible. It stays weak and dries back fast, so it reads
-     as light moving across the sheet rather than a film over the paintings. */
+  /* Over the thumbnails and screen blended, so a stroke can only add light.
+     Behind them the only gaps are 13px wide and none of it could be seen. */
   .sheet__wash{
     position:absolute; inset:0; z-index:3;
     pointer-events:none;
+    mix-blend-mode:screen;
   }
 
   /* ---------- edition mark ---------- */
@@ -187,6 +187,10 @@
 
   .err{ color:#e08b7a; }
 
+  /* The sheet has its own scroller. Without this the page behind keeps its
+     own, and the grid shows two vertical scrollbars. */
+  body.sheet-open{ overflow:hidden; }
+
   /* ---------- everything, on demand ---------- */
   .allBtn{
     display:block; margin:.85rem auto 0;
@@ -196,10 +200,12 @@
   }
   .allBtn:hover{ color:var(--canvas); }
 
+  /* Solid, with no backdrop-filter. It is the page now rather than something
+     laid over one, and a screen-blended layer above a filtered backdrop is
+     exactly what turned the other project's hero black. */
   .sheet{
     position:fixed; inset:0; z-index:60;
-    background:rgba(9,10,13,.93);
-    -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px);
+    background:var(--wall-2);
     display:flex; flex-direction:column;
     opacity:0; transition:opacity .3s var(--ease);
   }
@@ -315,7 +321,7 @@
 
 <div class="sheet" id="sheet" hidden>
   <div class="sheet__head">
-    <span id="sheetTitle">126 pezzi unici</span>
+    <span id="sheetTitle">Prova rilievo bomboniere · 126 pezzi unici</span>
     <button id="sheetClose" type="button" aria-label="Chiudi">&times;</button>
   </div>
   <canvas class="sheet__wash" id="sheetWash" aria-hidden="true"></canvas>
@@ -367,7 +373,7 @@
   var edNum   = document.getElementById('edNum');
   document.getElementById('edTot').textContent = String(TOTAL);
   document.getElementById('allBtn').textContent = 'Vedi tutte le ' + TOTAL;
-  document.getElementById('sheetTitle').textContent = TOTAL + ' pezzi unici';
+  document.getElementById('sheetTitle').textContent = 'Prova rilievo bomboniere · ' + TOTAL + ' pezzi unici';
 
   function fail(msg) { err.hidden = false; err.textContent = msg; }
 
@@ -747,11 +753,12 @@
     buildSheet();
     sheetBtns.forEach(function (b, j) { b.setAttribute('aria-current', String(j === current)); });
     sheet.hidden = false;
+    document.body.classList.add('sheet-open');
     // let it lay out before the class, or the fade has nothing to move from
     setTimeout(function () {
       if (fine && !reduced) {
-        veilOn = true; vpx = vpy = null; sizeWash();
-        if (!veilRaf) veilRaf = requestAnimationFrame(veilFrame);
+        brushOn = true; vpx = vpy = null; marks.length = 0; sizeWash();
+        if (!brushRaf) brushRaf = requestAnimationFrame(brushFrame);
       }
       sheet.classList.add('in');
       var cur = sheetBtns[current];
@@ -763,8 +770,9 @@
     sheet.classList.remove('in');
     setTimeout(function () {
       sheet.hidden = true;
-      veilOn = false;
-      if (veilRaf) { cancelAnimationFrame(veilRaf); veilRaf = 0; }
+      document.body.classList.remove('sheet-open');
+      brushOn = false;
+      if (brushRaf) { cancelAnimationFrame(brushRaf); brushRaf = 0; }
       if (wash.width) wctx.clearRect(0, 0, wash.width, wash.height);
     }, 320);
   }
@@ -780,7 +788,9 @@
   });
 
   select(hashArt >= 0 && hashArt < ART.length ? hashArt : 0);
-  if (hashAll) setTimeout(openSheet, 400);   // #all=1 opens straight to the grid
+  /* The grid is what you land on: it is the collection, and the viewer is
+     where one painting goes. #one=1 skips straight past it. */
+  if (!/(^|&)one=1/.test(location.hash.replace('#', ''))) setTimeout(openSheet, 120);
 
   /* ---------------- cursor ----------------
      Lifted from the painter site so the two feel like one thing. Both halves
@@ -809,23 +819,29 @@
     });
   }
 
-  /* ---------------- the veil ----------------
-     The same move the painter site makes with its hero: the sheet lies under
-     a veil and the cursor wipes it off, so sweeping across uncovers the
-     paintings' colour and it closes again behind you. The colour that appears
-     is the paintings' own - nothing is painted on top of them.
+  /* ---------------- the brush ----------------
+     Colour is added, never taken away: the grid is at full strength from the
+     moment it opens and the cursor lays light over it. An earlier version hid
+     the sheet under a veil and wiped it off, which meant the paintings only
+     looked right where the hand had been - the wrong way round for a page
+     whose whole job is showing them.
 
-     Plain alpha, no blend mode: the sheet sits on a backdrop-filter, and a
-     blended layer over a promoted backdrop is what turned the other hero
-     black. Fine pointers only - there is no cursor to wipe with on a phone,
-     and a drag there is how the sheet scrolls. */
-  var VEIL = '10,12,16';
-  var VEIL_A = 0.66;      // how far the paintings fall back before the brush
-  var HEAL = 0.014;       // how fast the veil closes again, per frame
+     Screen blending, so a stroke can only lighten. The sheet has no
+     backdrop-filter behind it any more, which is what made blending unsafe
+     before. Marks are redrawn from a list each frame rather than accumulated
+     on the canvas, so nothing can compound. */
+  var PAL = [
+    [42,166,196], [217,162,39], [216,69,47], [31,122,108],
+    [107,74,158], [194,65,126], [58,108,152]
+  ];
+  var BRUSH = 130;
+  var MARK_FADE = 0.028;      // a stroke lingers about a second
+  var MAX_MARKS = 110;
 
   var wash = document.getElementById('sheetWash');
   var wctx = wash.getContext('2d');
-  var veilOn = false, veilRaf = 0, vpx = null, vpy = null;
+  var brushOn = false, brushRaf = 0, vpx = null, vpy = null;
+  var marks = [], nib = 0, nibStep = 0;
 
   function sizeWash() {
     var r = sheet.getBoundingClientRect();
@@ -834,62 +850,74 @@
     wash.width = Math.round(r.width * dpr);
     wash.height = Math.round(r.height * dpr);
     wctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    wctx.globalCompositeOperation = 'source-over';
-    wctx.fillStyle = 'rgba(' + VEIL + ',' + VEIL_A + ')';
-    wctx.fillRect(0, 0, r.width, r.height);
   }
 
-  /* A soft pool, so the brush has no edge anywhere. */
-  function wipe(x, y, r) {
-    var g = wctx.createRadialGradient(x, y, 0, x, y, r);
-    g.addColorStop(0,    'rgba(0,0,0,0.30)');
-    g.addColorStop(0.45, 'rgba(0,0,0,0.17)');
-    g.addColorStop(1,    'rgba(0,0,0,0)');
-    wctx.globalCompositeOperation = 'destination-out';
+  function lay(m) {
+    var g = wctx.createRadialGradient(m.x, m.y, 0, m.x, m.y, m.r);
+    var head = 'rgba(' + m.c[0] + ',' + m.c[1] + ',' + m.c[2] + ',';
+    var a = m.life * m.a;
+    g.addColorStop(0,    head + a + ')');
+    g.addColorStop(0.42, head + (a * 0.55) + ')');
+    g.addColorStop(1,    head + '0)');
     wctx.fillStyle = g;
     wctx.beginPath();
-    wctx.arc(x, y, r, 0, Math.PI * 2);
+    wctx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
     wctx.fill();
-    wctx.globalCompositeOperation = 'source-over';
   }
 
-  function veilStroke(x, y) {
+  function brushStroke(x, y) {
     if (vpx === null) { vpx = x; vpy = y; }
     var dx = x - vpx, dy = y - vpy;
     var dist = Math.sqrt(dx * dx + dy * dy);
-    // a quick hand should leave a thinner, longer wash than a slow one
-    var rad = 118 - Math.min(dist, 90) * 0.42;
-    var n = Math.max(1, Math.ceil(dist / 14));
+    if (dist < 1) return;
+
+    // the nib runs dry and reloads, so a long sweep changes colour as it goes
+    nibStep += dist;
+    if (nibStep > 260) { nibStep = 0; nib = (nib + 1) % PAL.length; }
+    var col = PAL[nib];
+
+    var rad = BRUSH - Math.min(dist, 80) * 0.35;
+    var n = Math.max(1, Math.ceil(dist / 18));
     for (var i = 1; i <= n; i++) {
       var t = i / n;
-      wipe(vpx + dx * t, vpy + dy * t, rad);
+      marks.push({
+        x: vpx + dx * t, y: vpy + dy * t, r: rad, c: col,
+        a: 0.20 + Math.min(dist, 60) / 480, life: 1
+      });
     }
+    if (marks.length > MAX_MARKS) marks.splice(0, marks.length - MAX_MARKS);
+    // lay it now rather than waiting for the next frame: the hand should not
+    // have to outrun the animation loop, and rAF stops in a background tab.
+    // The frame redraws the whole list anyway, so this cannot double up.
+    for (var j = marks.length - n; j < marks.length; j++) if (marks[j]) lay(marks[j]);
     vpx = x; vpy = y;
   }
 
-  function veilFrame() {
-    veilRaf = 0;
-    if (!veilOn) return;
+  function brushFrame() {
+    brushRaf = 0;
+    if (!brushOn) return;
     var r = sheet.getBoundingClientRect();
     if (r.width > 1) {
-      // closes back over what was uncovered; already-veiled areas are opaque
-      // and take nothing from this
-      wctx.globalCompositeOperation = 'source-over';
-      wctx.fillStyle = 'rgba(' + VEIL + ',' + HEAL + ')';
-      wctx.fillRect(0, 0, r.width, r.height);
+      wctx.clearRect(0, 0, r.width, r.height);
+      for (var i = marks.length - 1; i >= 0; i--) {
+        marks[i].life -= MARK_FADE;
+        if (marks[i].life <= 0) { marks.splice(i, 1); continue; }
+        lay(marks[i]);
+      }
     }
-    veilRaf = requestAnimationFrame(veilFrame);
+    brushRaf = requestAnimationFrame(brushFrame);
   }
 
   sheet.addEventListener('pointermove', function (e) {
-    if (!veilOn) return;
+    if (!brushOn) return;
     var r = sheet.getBoundingClientRect();
-    veilStroke(e.clientX - r.left, e.clientY - r.top);
+    brushStroke(e.clientX - r.left, e.clientY - r.top);
   }, { passive: true });
 
-  // the veil is screen-fixed, so a scroll would smear what is already open
+  // the canvas is screen-fixed, so a scroll would smear the stroke sideways
   sheetScroll.addEventListener('scroll', function () { vpx = vpy = null; }, { passive: true });
-  window.addEventListener('resize', function () { if (veilOn) sizeWash(); });
+  sheet.addEventListener('pointerleave', function () { vpx = vpy = null; });
+  window.addEventListener('resize', function () { if (brushOn) sizeWash(); });
 
   /* ---------------- draw ---------------- */
   (function frame() {
