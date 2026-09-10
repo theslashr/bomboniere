@@ -35,10 +35,14 @@
      taking a row of its own, and retires the moment the hand arrives - so it
      costs no height, and the gap it used to leave behind goes with it. */
   .sub{
-    position:absolute; left:0; right:0; bottom:-1.75rem;
-    color:var(--muted); font-size:.7rem; letter-spacing:.11em;
+    position:absolute; left:0; right:0; bottom:0; z-index:2;
+    margin:0; padding:2.2rem .8rem .7rem;
+    color:rgba(244,239,230,.92); font-size:.68rem; letter-spacing:.12em;
     text-transform:uppercase; text-align:center; line-height:1.4;
-    pointer-events:none; margin:0;
+    pointer-events:none;
+    /* a scrim, because it has to be readable over whichever painting it
+       happens to land on */
+    background:linear-gradient(to top, rgba(6,8,11,.78), rgba(6,8,11,0));
     transition:opacity .6s var(--ease);
   }
   .sub.gone{ opacity:0; }
@@ -69,7 +73,7 @@
     width:auto; height:auto;
   }
   .plate::after{
-    content:""; position:absolute; inset:0; pointer-events:none;
+    content:""; position:absolute; inset:0; pointer-events:none; z-index:3;
     box-shadow:inset 0 0 0 1px rgba(255,252,244,.10); border-radius:inherit;
   }
 
@@ -314,8 +318,10 @@
 </div>
 
 <div class="stage" id="stage">
-  <div class="plate" id="plate"><canvas id="gl"></canvas></div>
-  <p class="sub" id="sub">Muovi il puntatore sul quadro</p>
+  <div class="plate" id="plate">
+    <canvas id="gl"></canvas>
+    <p class="sub" id="sub">Muovi il puntatore sul quadro</p>
+  </div>
 </div>
 
 <div class="edition" id="edition" aria-live="polite">
