@@ -101,26 +101,16 @@
   }
 
   /* ---------- the wash the grid picks up as it scrolls ---------- */
-  /* A mild desaturation over the whole sheet, masked away around the pointer.
-     Where the mask is transparent the layer is not painted at all, so the
-     paintings under the hand are untouched and the rest sit back a little.
-     Nothing is added on top of the artwork. */
-  .sheet__near{
-    position:absolute; inset:0; z-index:3;
-    pointer-events:none;
-    opacity:0; transition:opacity .5s var(--ease);
-    /* colour, not darkness: brightness barely moves, saturation does the work */
-    -webkit-backdrop-filter:saturate(.6) brightness(.96);
-    backdrop-filter:saturate(.6) brightness(.96);
-    --mx:50%; --my:50%;
-    /* the core is wide enough to hold a whole thumbnail at full strength,
-       then falls away over the next few */
-    -webkit-mask-image:radial-gradient(circle 420px at var(--mx) var(--my),
-      transparent 0%, transparent 30%, #000 100%);
-    mask-image:radial-gradient(circle 420px at var(--mx) var(--my),
-      transparent 0%, transparent 30%, #000 100%);
+  /* Light falls on whole paintings, not through a hole in a sheet of glass.
+     A mask over a backdrop-filter was the obvious way and it did not work:
+     mask-composite:intersect would not punch the extra holes, so every point
+     came back within a few percent of every other and there was no falloff at
+     all. Per-painting also reads better - a picture is lit or it is not,
+     rather than a circle cutting across three of them. */
+  .sheet__grid button{
+    --lit:0;
+    filter:saturate(calc(.5 + .5 * var(--lit))) brightness(calc(.93 + .07 * var(--lit)));
   }
-  .sheet__near.on{ opacity:1; }
 
   /* ---------- edition mark ---------- */
   .edition{
@@ -337,7 +327,6 @@
     <span id="sheetTitle">Prova rilievo bomboniere · 126 pezzi unici</span>
     <button id="sheetClose" type="button" aria-label="Chiudi">&times;</button>
   </div>
-  <div class="sheet__near" id="sheetNear" aria-hidden="true"></div>
   <div class="sheet__scroll" id="sheetScroll">
     <div class="sheet__grid" id="sheetGrid"></div>
   </div>
@@ -767,6 +756,8 @@
     sheetBtns.forEach(function (b, j) { b.setAttribute('aria-current', String(j === current)); });
     sheet.hidden = false;
     document.body.classList.add('sheet-open');
+    measureBoxes();
+    if (!reduced && !litRaf) litRaf = requestAnimationFrame(litFrame);
     // let it lay out before the class, or the fade has nothing to move from
     setTimeout(function () {
 
@@ -781,7 +772,7 @@
     setTimeout(function () {
       sheet.hidden = true;
       document.body.classList.remove('sheet-open');
-      near.classList.remove('on');
+      if (litRaf) { cancelAnimationFrame(litRaf); litRaf = 0; }
     }, 320);
   }
 
@@ -828,29 +819,88 @@
   }
 
   /* ---------------- proximity ----------------
-     Nothing is painted over the grid. One layer sits above it carrying a mild
-     desaturation, masked out around the pointer, so the paintings the hand is
-     near are at full strength and the rest sit back a little. The mask centre
-     is two custom properties written straight from the pointer event, so it
-     tracks exactly - no easing, no trail, nothing to fall behind.
+     Every painting carries how lit it is, 0 to 1, and the CSS turns that into
+     saturation. Light comes from the pointer and from three slow drifts, so
+     the grid keeps moving when nobody is touching it.
 
-     One style write per move on one element, rather than a filter recomputed
-     on 126 of them. */
-  var near = document.getElementById('sheetNear');
+     Positions are measured once, from offsetLeft/offsetTop against the grid,
+     and only adjusted by scrollTop afterwards. Reading getBoundingClientRect
+     on 126 elements every frame would force a layout each time. */
+  var CURSOR_R = 520;      // how far the hand reaches
+  var WAVE_R = 400;
+  var lit = [], boxes = null, litRaf = 0;
+  var pmx = -9999, pmy = -9999;
 
-  function moveNear(e) {
-    var r = sheet.getBoundingClientRect();
-    near.style.setProperty('--mx', (e.clientX - r.left) + 'px');
-    near.style.setProperty('--my', (e.clientY - r.top) + 'px');
+  function measureBoxes() {
+    if (!sheetBtns) return;
+    boxes = [];
+    for (var i = 0; i < sheetBtns.length; i++) {
+      var b = sheetBtns[i];
+      boxes.push({
+        el: b,
+        x: b.offsetLeft + b.offsetWidth / 2,
+        y: b.offsetTop + b.offsetHeight / 2
+      });
+      lit[i] = -1;
+    }
   }
 
-  if (fine && !reduced) {
+  function falloff(d, r) {
+    if (d >= r) return 0;
+    var t = 1 - d / r;
+    return t * t;           // soft edge, bright core
+  }
+
+  function litFrame(now) {
+    litRaf = requestAnimationFrame(litFrame);
+    lastT = now || 0;
+    paintLit();
+  }
+
+  /* Split out so the pointer can drive it directly. rAF stops in a background
+     tab, and the hand should not have to wait on the animation loop. */
+  var lastT = 0;
+  function paintLit() {
+    if (!boxes) return;
+    var t = lastT;
+    var gr = sheetGrid.getBoundingClientRect();
+    var top = gr.top, left = gr.left;
+    var W = sheet.clientWidth, H = sheet.clientHeight;
+
+    // three drifts, in the sheet's own coordinates
+    var w1x = W * (0.26 + Math.sin(t * 0.000091) * 0.24);
+    var w1y = H * (0.32 + Math.cos(t * 0.000063) * 0.26);
+    var w2x = W * (0.72 + Math.sin(t * 0.000067 + 2.1) * 0.22);
+    var w2y = H * (0.58 + Math.cos(t * 0.000101 + 1.3) * 0.28);
+    var w3x = W * (0.48 + Math.sin(t * 0.000053 + 4.2) * 0.30);
+    var w3y = H * (0.76 + Math.cos(t * 0.000079 + 0.7) * 0.22);
+
+    for (var i = 0; i < boxes.length; i++) {
+      var bx = boxes[i].x + left, by = boxes[i].y + top;
+      var v = falloff(Math.hypot(bx - pmx, by - pmy), CURSOR_R);
+      var a = falloff(Math.hypot(bx - w1x, by - w1y), WAVE_R) * 0.85;
+      if (a > v) v = a;
+      a = falloff(Math.hypot(bx - w2x, by - w2y), WAVE_R) * 0.85;
+      if (a > v) v = a;
+      a = falloff(Math.hypot(bx - w3x, by - w3y), WAVE_R) * 0.85;
+      if (a > v) v = a;
+
+      // only write when it actually moved: most of 126 are still each frame
+      if (Math.abs(v - lit[i]) > 0.02) {
+        lit[i] = v;
+        boxes[i].el.style.setProperty('--lit', v.toFixed(3));
+      }
+    }
+  }
+
+  if (fine) {
     sheet.addEventListener('pointermove', function (e) {
-      moveNear(e);
-      near.classList.add('on');
+      pmx = e.clientX; pmy = e.clientY;
+      paintLit();
     }, { passive: true });
-    sheet.addEventListener('pointerleave', function () { near.classList.remove('on'); });
+    sheet.addEventListener('pointerleave', function () { pmx = pmy = -9999; paintLit(); });
   }
+  window.addEventListener('resize', function () { if (boxes) measureBoxes(); });
 
   /* ---------------- draw ---------------- */
   (function frame() {

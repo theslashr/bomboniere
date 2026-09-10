@@ -61,25 +61,33 @@ nothing to scroll.
 The grid is what opens first — it is the collection, and the viewer is where a
 single painting goes. `#one=1` skips straight to the viewer.
 
-Nothing is painted over the grid. One layer sits above it carrying a mild
-desaturation, masked away around the pointer, so the paintings the hand is near
-keep all their colour and the rest sit back a little: 100% saturation on the
-cursor, 97% one thumbnail across, 81% two away, about 63% in the far corners,
-with brightness barely moving. It is about colour, not darkness.
+Nothing is painted over the grid. Every painting carries how lit it is, 0 to 1,
+and the CSS turns that into saturation: full colour under the hand, falling to
+about half a dozen thumbnails away. Light comes from the pointer and from three
+slow drifts, so the grid keeps moving when nobody is touching it rather than
+sitting dead everywhere the cursor is not.
 
-The mask centre is two custom properties written straight from the pointer
-event, so it tracks exactly — no easing, no trail, nothing to fall behind. One
-style write per move on one element, rather than a filter recomputed on 126 of
-them.
+Whole paintings light rather than a circle cutting across three of them, which
+also sidesteps the obvious implementation. A `backdrop-filter` layer masked with
+several radial gradients ought to work and does not: `mask-composite: intersect`
+would not punch the extra holes, and measured across the sheet every point came
+back within a few percent of every other — no falloff at all.
 
-Two earlier attempts are worth recording as dead ends. A veil over the grid that
-the cursor wiped off meant the paintings only looked right where the hand had
-been, which is backwards for a page whose job is showing them — and it healed by
-refilling the canvas each frame, which compounds under `source-over` rather than
-settling at a target alpha, so the sheet slowly went black. Screen-blended
-colour laid on top read as streaks across half the screen and buried the real
-colours. Both were adding something; what was wanted was taking a little away
-from everything except what you are looking at.
+Positions are measured once from `offsetLeft`/`offsetTop` and only adjusted by
+scroll afterwards; reading `getBoundingClientRect` on 126 elements a frame would
+force a layout each time. A value is only written when it has actually moved, so
+most of the 126 are untouched on any given frame. The pointer drives it
+directly as well as through the animation loop, because rAF stops in a
+background tab and the hand should not wait on it.
+
+Three dead ends are worth recording. A veil the cursor wiped off meant the
+paintings only looked right where the hand had been — backwards for a page whose
+job is showing them — and it healed by refilling the canvas each frame, which
+compounds under `source-over` rather than settling at a target alpha, so the
+sheet slowly went black. Screen-blended colour laid on top read as streaks
+across half the screen and buried the real colours. Both were adding something;
+what was wanted was taking a little away from everything except what you are
+looking at.
 
 Fine pointers only; on a phone there is no cursor and a drag is how the grid
 scrolls.
