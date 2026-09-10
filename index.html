@@ -129,7 +129,9 @@
 
   /* ---------- edition mark ---------- */
   .edition{
-    display:flex; align-items:baseline; justify-content:center; gap:.42rem;
+    /* centred, not baseline: the number is 2.15rem and the rest under .9rem,
+       so a shared baseline left them visibly stepped against each other */
+    display:flex; align-items:center; justify-content:center; gap:.5rem;
     margin:var(--breathe) 0 0;
     font-variant-numeric:tabular-nums; line-height:1;
     opacity:0; transform:translateY(4px);
@@ -143,10 +145,79 @@
   .edition .sep{ font-size:1rem; color:#4a4e55; font-weight:300; }
   .edition .tot{ font-size:.82rem; color:var(--muted); letter-spacing:.13em; }
   .edition .uniq{
-    margin-left:.55rem; padding-left:.7rem; font-size:.62rem; letter-spacing:.18em;
+    margin-left:.4rem; padding-left:.8rem; font-size:.62rem; letter-spacing:.18em;
     text-transform:uppercase; color:#5f646b; border-left:1px solid rgba(255,255,255,.13);
-    align-self:center;
+    line-height:1.6;
   }
+
+  /* ---------- the reel ----------
+     Ported from a React/Framer component rather than dropped in: this page is
+     one static file with no build step, and a toolchain for one carousel would
+     be a poor trade. The maths is the whole idea anyway - a card sits at
+     theta = i*step + rotation on an ellipse, and cos(theta) places it, sizes
+     it and stacks it. One number driving all three is why a card that looks
+     nearer is nearer, and the stacking can never disagree with the
+     perspective.
+
+     The ellipse is centred on the left edge, so the far half is clipped away
+     and what is left is an arc bulging toward the painting. */
+  /* A flex pair rather than a grid: the grid gave the painting a 1fr column
+     and it centred inside it, which put 300px of nothing between the arc and
+     the picture. Sized to content and centred together, they stay adjacent at
+     any width. */
+  /* With a painting whose width changes, you cannot have the arc fixed, the
+     composition centred and the gap constant all at once. Centring the pair
+     let the painting's width slide the arc sideways; anchoring the pair left
+     kept the arc still but left half the screen empty. So the painting gets a
+     box of its own, constant width, and the pair is centred: the arc never
+     moves, the composition stays balanced, and what gives is the gap - tight
+     for a wide painting, moderate for a narrow one. */
+  .viewer{
+    display:flex; align-items:center; justify-content:center;
+    gap:clamp(.4rem,1.2vw,1.1rem);
+    width:100%;
+  }
+  .reel{
+    position:relative; overflow:hidden;
+    flex:0 0 auto; width:clamp(190px,21vw,300px);
+    height:min(74svh,720px);
+    cursor:grab; touch-action:pan-y;
+    outline:none;
+    /* Two fades, not one. The vertical was always here so the ends of the arc
+       fall away instead of being sliced. But the ellipse is centred on the
+       box's left edge, which is mid-page, so every card was also cut in half
+       down a hard vertical line - a seam the eye reads as a mistake. The
+       second gradient dissolves that half instead of cutting it. */
+    -webkit-mask-image:
+      linear-gradient(to bottom, transparent, #000 9%, #000 91%, transparent),
+      linear-gradient(to right, transparent, rgba(0,0,0,.55) 12%, #000 34%);
+    mask-image:
+      linear-gradient(to bottom, transparent, #000 9%, #000 91%, transparent),
+      linear-gradient(to right, transparent, rgba(0,0,0,.55) 12%, #000 34%);
+    -webkit-mask-composite:source-in;
+    mask-composite:intersect;
+  }
+  .reel:active{ cursor:grabbing; }
+  .reel button{
+    position:absolute; left:0; top:50%;
+    padding:0; border:0; background:none; cursor:pointer;
+    line-height:0; border-radius:2px; overflow:hidden;
+    will-change:transform;
+    box-shadow:0 16px 30px -14px rgba(0,0,0,.85);
+  }
+  .reel img{ display:block; width:100%; height:100%; object-fit:cover; }
+  .reel button::after{
+    content:""; position:absolute; inset:0; border-radius:inherit;
+    box-shadow:inset 0 0 0 1px rgba(255,252,244,.14);
+    transition:box-shadow .35s var(--ease);
+  }
+  .reel button[aria-current="true"]::after{ box-shadow:inset 0 0 0 2px var(--ochre); }
+  .show{
+    display:flex; flex-direction:column; align-items:center;
+    flex:0 0 auto; width:min(48vw,720px);
+  }
+  .show .stage{ justify-content:center; width:100%; max-width:none; }
+  .show .edition{ justify-content:center; }
 
   /* ---------- rail ---------- */
   .strip{
@@ -181,6 +252,28 @@
   }
   .strip button[aria-current="true"]::after{ opacity:1; box-shadow:inset 0 0 0 1px var(--ochre); }
   .strip img{ display:block; height:clamp(54px,7.4vw,76px); width:auto; border-radius:2px; }
+
+  /* After the rules they override, not before: equal specificity means source
+     order decides, and above the rail block these did nothing at all.
+
+     The arc does not come to the phone. Rotating it a quarter turn along the
+     bottom was tried and is the wrong shape for the screen: the band it can
+     have is about 140px tall, which leaves cards under 90px and an ellipse
+     whose depth axis is longer than the band, so the back of the ring lands
+     outside the box in the room the edition mark and the button are using.
+     Portrait and landscape paintings then move that band by different amounts
+     and the whole column shifts under you. The rail is flat by nature and
+     scrolls with the thumb, so mobile keeps the rail. */
+  @media (max-width:900px){
+    .viewer{ display:block; width:100%; }
+    .show{ width:100%; }
+    .show .stage{ justify-content:center; }
+    .show .edition{ justify-content:center; }
+    .reel{ display:none; }
+  }
+  @media (min-width:901px){
+    .strip{ display:none; }
+  }
 
   /* ---------- controls ---------- */
   .panel{ margin-top:1rem; width:min(100%,540px); display:grid; gap:.7rem; font-size:.76rem; color:var(--muted); }
@@ -317,18 +410,24 @@
   </svg>
 </div>
 
-<div class="stage" id="stage">
-  <div class="plate" id="plate">
-    <canvas id="gl"></canvas>
-    <p class="sub" id="sub">Muovi il puntatore sul quadro</p>
-  </div>
-</div>
+<div class="viewer">
+  <div class="reel" id="reel" tabindex="0" role="listbox" aria-label="Scegli un quadro"></div>
 
-<div class="edition" id="edition" aria-live="polite">
-  <span class="n"  id="edNum">—</span>
-  <span class="sep">/</span>
-  <span class="tot" id="edTot">126</span>
-  <span class="uniq">pezzo unico</span>
+  <div class="show">
+    <div class="stage" id="stage">
+      <div class="plate" id="plate">
+        <canvas id="gl"></canvas>
+        <p class="sub" id="sub">Muovi il puntatore sul quadro</p>
+      </div>
+    </div>
+
+    <div class="edition" id="edition" aria-live="polite">
+      <span class="n"  id="edNum">—</span>
+      <span class="sep">/</span>
+      <span class="tot" id="edTot">126</span>
+      <span class="uniq">pezzo unico</span>
+    </div>
+  </div>
 </div>
 
 <div class="strip" id="strip"></div>
@@ -694,6 +793,7 @@
     current = i;
     markStrip(i);
     setEdition(i);
+    syncReel(i);
 
     var name = ART[i];
     var warm = !!cache[name];
@@ -720,6 +820,12 @@
       };
       img.src = 'img/full/' + name + '.jpg';
     }, warm ? 200 : 340);
+  }
+
+  function syncReel(i) {
+    if (!reelCards || !reelCards.length || dragging) return;
+    if (wrapIdx(Math.round(posTarget)) === i) return;
+    spinTo(i);
   }
 
   function apply(nm) {
@@ -830,6 +936,171 @@
     document.addEventListener('pointerout', function (e) {
       if (e.target.closest && e.target.closest('button, a, .plate')) cur.classList.remove('on');
     });
+  }
+
+  /* ---------------- the reel ----------------
+     A fixed number of cards ride the ellipse and the items rotate through
+     them, so 126 paintings cost thirteen elements rather than 126. Card j
+     shows item round(pos) + j - mid, and sits at (j - mid - frac) * step
+     around the ring: when pos crosses a whole number the assignment shifts by
+     one card and the angle resets by one step, which cancel, so the ring
+     turns forever without a seam.
+
+     Loading is held until it settles. Each painting costs a normal map of the
+     better part of a second, and spinning past forty of them must not queue
+     forty builds. */
+  var reel = document.getElementById('reel');
+  var SLOTS = 17, MID = 8;
+  var CARD_W = 96, CARD_H = 132, MIN_SCALE = 0.34;
+  var reelCards = [], pos = 0, posTarget = 0, reelRaf = 0, reelBase = -1;
+  var dragging = false, dragY = 0, settleTimer = 0;
+  var downY = 0, downId = null, moved = false;
+
+  function wrapIdx(i) { return ((i % ART.length) + ART.length) % ART.length; }
+
+  function buildReel() {
+    if (reelCards.length || !reel) return;
+    for (var j = 0; j < SLOTS; j++) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('aria-current', 'false');
+      var im = document.createElement('img');
+      im.alt = ''; im.decoding = 'async'; im.draggable = false;
+      b.appendChild(im);
+      /* this, not b: var is function scoped, so every handler would close over
+         the last button the loop made and each card would pick the same one. */
+      b.addEventListener('click', function () {
+        if (moved) return;                       // that was a drag, not a pick
+        var idx = parseInt(this.dataset.idx, 10);
+        if (isNaN(idx)) return;
+        spinTo(idx);
+        // spinTo only turns the ring; the painting has to be asked for too
+        select(idx);
+      });
+      reel.appendChild(b);
+      reelCards.push(b);
+    }
+  }
+
+  /* Shortest way round, so jumping from 120 to 3 turns six steps and not a
+     hundred and seventeen. */
+  function spinTo(target) {
+    var n = ART.length;
+    var d = ((target - wrapIdx(Math.round(posTarget))) % n + n) % n;
+    if (d > n / 2) d -= n;
+    posTarget = Math.round(posTarget) + d;
+    startReel();
+  }
+
+  function layoutReel() {
+    if (!reelCards.length) return;
+    var w = reel.clientWidth, h = reel.clientHeight;
+    // below 900px the reel is display:none and both of these are zero, which
+    // is also how the layout stops running on a phone
+    if (w < 2 || h < 2) return;
+    var cw = CARD_W, ch = CARD_H;
+    // the ellipse sits on the left edge and bulges right
+    var rx = Math.max(40, w - cw * 0.62);
+    var ry = h * 0.40;
+    var step = (Math.PI * 2) / SLOTS;
+    var base = Math.round(pos), frac = pos - base;
+
+    if (base !== reelBase) {
+      reelBase = base;
+      for (var k = 0; k < SLOTS; k++) {
+        var idx = wrapIdx(base + k - MID);
+        var card = reelCards[k];
+        if (card.dataset.idx !== String(idx)) {
+          card.dataset.idx = String(idx);
+          card.firstChild.src = 'img/thumb/' + ART[idx] + '.jpg';
+          card.setAttribute('aria-label', 'Quadro ' + (idx + 1));
+        }
+      }
+    }
+
+    for (var j = 0; j < SLOTS; j++) {
+      var th = (j - MID - frac) * step;
+      var c = Math.cos(th), sn = Math.sin(th);
+      var sc = MIN_SCALE + (1 - MIN_SCALE) * ((c + 1) / 2);
+      var el = reelCards[j];
+      el.style.width = cw + 'px';
+      el.style.height = ch + 'px';
+      var px = c * rx;
+      var py = sn * ry;
+      el.style.transform =
+        'translate(' + (px - cw / 2).toFixed(1) + 'px,' +
+        (py - ch / 2).toFixed(1) + 'px) scale(' + sc.toFixed(3) + ')';
+      el.style.zIndex = String(Math.round(sc * 1000));
+      var t = (c + 1) / 2;
+      el.style.opacity = (0.32 + 0.68 * t).toFixed(3);
+      // the same idea as the grid: what you are not looking at keeps less colour
+      el.style.filter = 'saturate(' + (0.34 + 0.66 * t).toFixed(3) + ')';
+      el.setAttribute('aria-current', String(Math.abs(th) < step / 2));
+    }
+  }
+
+  function reelFrame() {
+    reelRaf = 0;
+    var d = posTarget - pos;
+    if (Math.abs(d) < 0.0008) { pos = posTarget; layoutReel(); return; }
+    pos += d * 0.16;
+    layoutReel();
+    reelRaf = requestAnimationFrame(reelFrame);
+  }
+  function startReel() { if (!reelRaf) reelRaf = requestAnimationFrame(reelFrame); }
+
+  function settleReel() {
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(function () {
+      posTarget = Math.round(posTarget);
+      startReel();
+      select(wrapIdx(Math.round(posTarget)));
+    }, 160);
+  }
+
+  if (reel) {
+    buildReel();
+    pos = posTarget = (current >= 0 ? current : 0);
+    reelBase = -1;
+    layoutReel();
+    reel.addEventListener('pointerdown', function (e) {
+      downY = dragY = e.clientY; downId = e.pointerId;
+      moved = false; dragging = false;
+    });
+    reel.addEventListener('pointermove', function (e) {
+      if (downId === null || e.pointerId !== downId) return;
+      var v = e.clientY;
+      if (!moved && Math.abs(v - downY) > 4) {
+        moved = dragging = true;
+        // taken now, not on pointerdown: capturing up front makes the reel the
+        // click target and a card can never be clicked at all
+        if (reel.setPointerCapture) reel.setPointerCapture(e.pointerId);
+      }
+      if (!dragging) return;
+      var dy = v - dragY;
+      dragY = v;
+      posTarget += dy * 0.012;
+      pos += dy * 0.012;          // follow the hand exactly while it is down
+      layoutReel();
+    });
+    function endReelDrag(e) {
+      if (downId === null) return;
+      if (dragging) settleReel();
+      if (reel.hasPointerCapture && reel.hasPointerCapture(downId)) {
+        reel.releasePointerCapture(downId);
+      }
+      downId = null; dragging = false;
+      // let the click through first, then forget it was a drag
+      setTimeout(function () { moved = false; }, 0);
+    }
+    reel.addEventListener('pointerup', endReelDrag);
+    reel.addEventListener('pointercancel', endReelDrag);
+    reel.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      posTarget += e.deltaY * 0.004;
+      startReel(); settleReel();
+    }, { passive: false });
+    window.addEventListener('resize', layoutReel);
   }
 
   /* ---------------- proximity ----------------

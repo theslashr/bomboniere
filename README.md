@@ -107,6 +107,46 @@ The cursor is the painter site's, lifted whole: a ring and a dot, both on the
 real pointer, `mix-blend-mode: difference` so one cursor reads on a near-black
 wall and on a bright painting without changing colour.
 
+## The arc
+
+Beside the painting on a wide screen, seventeen thumbnails ride an ellipse
+centred on the left edge of their box, so the far half is clipped and what is
+left bulges toward the picture. A card sits at `theta = i*step + rotation`, and
+`cos(theta)` alone places it, scales it and stacks it. One number driving all
+three is why a card that looks nearer is nearer: the stacking cannot disagree
+with the perspective, because it is derived from it.
+
+The ring is virtual. Seventeen cards exist and the painting each one shows is
+reassigned as the ring turns, so 126 paintings cost seventeen elements and the
+reel scrolls forever in either direction.
+
+Two masks, intersected. The vertical one lets the ends of the arc fall away
+instead of being sliced; the horizontal one dissolves the clipped half, which
+otherwise ended on a hard line down the middle of the page and read as a
+mistake.
+
+The pair is centred but the painting has a box of its own at constant width.
+With a painting whose width changes you cannot have the arc fixed, the
+composition centred and the gap constant all at once — centring the pair let
+the painting's width slide the arc sideways, anchoring it left emptied half the
+screen. What gives is the gap: tight for a wide painting, moderate for a narrow
+one, and the arc never moves.
+
+The arc does not go to the phone. Rotated a quarter turn along the bottom it
+gets a band about 140px tall, which leaves cards under 90px and an ellipse
+whose depth axis is longer than the band, so the back of the ring lands outside
+the box in the room the edition mark and the button use — and portrait and
+landscape paintings then move that band by different amounts. Mobile keeps the
+flat rail, which is the right shape for the screen and scrolls with the thumb.
+Below 900px the reel is `display:none`, which is also what stops the layout
+running: the box measures zero and the first guard returns.
+
+Dragging turns the ring; clicking a card brings it to the front. Both were
+broken at first for unrelated reasons worth remembering — `setPointerCapture`
+on pointerdown retargets the subsequent click to the reel, so capture waits for
+4px of movement; and `var` in the build loop meant all seventeen handlers
+closed over the last card, so the index is read from `this.dataset` instead.
+
 ## Memory
 
 Each painting held in the cache costs roughly 8MB — a normal map canvas and its
@@ -116,9 +156,9 @@ canvas backing store of the ones it drops.
 
 ## Two builds
 
-- `index.html` — the one to show someone. No controls: the picture, the rail,
+- `index.html` — the one to show someone. No controls: the picture, the arc,
   and settings fixed at what looked right across the whole set. **Vedi tutte le
-  126** opens every piece as a masonry sheet to jump anywhere; the rail is for
+  126** opens every piece as a masonry sheet to jump anywhere; the arc is for
   browsing what is nearby.
 - `tuning.html` — the same viewer with the sliders and the view modes back,
   for changing those settings.
