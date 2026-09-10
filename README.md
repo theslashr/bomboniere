@@ -62,10 +62,15 @@ The grid is what opens first — it is the collection, and the viewer is where a
 single painting goes. `#one=1` skips straight to the viewer.
 
 Nothing is painted over the grid. Every painting carries how lit it is, 0 to 1,
-and the CSS turns that into saturation: full colour under the hand, falling to
-about half a dozen thumbnails away. Light comes from the pointer and from three
-slow drifts, so the grid keeps moving when nobody is touching it rather than
-sitting dead everywhere the cursor is not.
+and the CSS turns that into saturation. Light comes from the pointer and from
+three drifts on a roughly seventeen second cycle, so the grid keeps moving when
+nobody is touching it rather than sitting dead everywhere the cursor is not:
+with the pointer off-screen entirely, half the visible cards sit above 0.5.
+
+The falloff is a smoothstep, not a square. Squared put a card one thumbnail out
+at half lit and two out at a quarter, which read as only the card under the
+hand being lit at all. The drifts also started on a sixty-nine second cycle,
+which is slow enough that nothing appears to move.
 
 Whole paintings light rather than a circle cutting across three of them, which
 also sidesteps the obvious implementation. A `backdrop-filter` layer masked with
