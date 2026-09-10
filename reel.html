@@ -165,15 +165,17 @@
      and it centred inside it, which put 300px of nothing between the arc and
      the picture. Sized to content and centred together, they stay adjacent at
      any width. */
-  /* Anchored left inside a centred box, not centred as a pair. Centring the
-     pair meant the painting's width set the group's width, so a landscape
-     piece slid the whole arc sideways and every switch between orientations
-     moved the furniture. The arc and the gap are fixed now; what varies is the
-     space to the right of the painting, where nothing is anchored. */
+  /* With a painting whose width changes, you cannot have the arc fixed, the
+     composition centred and the gap constant all at once. Centring the pair
+     let the painting's width slide the arc sideways; anchoring the pair left
+     kept the arc still but left half the screen empty. So the painting gets a
+     box of its own, constant width, and the pair is centred: the arc never
+     moves, the composition stays balanced, and what gives is the gap - tight
+     for a wide painting, moderate for a narrow one. */
   .viewer{
-    display:flex; align-items:center; justify-content:flex-start;
+    display:flex; align-items:center; justify-content:center;
     gap:clamp(.4rem,1.2vw,1.1rem);
-    width:min(100%,1400px); margin-inline:auto;
+    width:100%;
   }
   .reel{
     position:relative; overflow:hidden;
@@ -200,13 +202,11 @@
   }
   .reel button[aria-current="true"]::after{ box-shadow:inset 0 0 0 2px var(--ochre); }
   .show{
-    display:flex; flex-direction:column; align-items:flex-start;
-    min-width:0; flex:1 1 auto;
+    display:flex; flex-direction:column; align-items:center;
+    flex:0 0 auto; width:min(48vw,720px);
   }
-  .show .stage{ justify-content:flex-start; }
-  /* the number sits under the painting's left edge, which is the one edge that
-     does not move */
-  .show .edition{ justify-content:flex-start; }
+  .show .stage{ justify-content:center; width:100%; max-width:none; }
+  .show .edition{ justify-content:center; }
 
   /* ---------- rail ---------- */
   .strip{
