@@ -300,10 +300,20 @@
      reads as plastic. tuning.html is the same viewer with the sliders back. */
   var RELIEF = 3.2, GLOSS = 91.0, SPEC = 0.52, TILT = 4.3;
 
-  /* A phone shows the picture far smaller, so the same rotation reads as far
-     less of a movement. A fifth more makes up for it. Only the plate turns
-     further; the light keeps the range it already had. */
-  if (matchMedia('(hover: none)').matches) TILT *= 1.2;
+  var LIGHT_Z = 0.85;
+
+  /* A phone shows the picture far smaller, so the same movement reads as far
+     less of one. A fifth more makes up for it, and both halves have to take it
+     or the plate swings further while the light carries on as before, which
+     looks like tilting something and having nothing happen.
+
+     tan(angle) = |xy| / z, so dividing z is exactly scaling x and y, and it
+     leaves the clamp on the aim still meaning what it meant. */
+  if (matchMedia('(hover: none)').matches) {
+    var BOOST = 1.2;
+    TILT *= BOOST;
+    LIGHT_Z /= BOOST;
+  }
   var current = -1, ready = false;
   var hashArt = -1;
 
@@ -417,7 +427,7 @@
       ly += (tly - ly) * 0.12;
       plate.style.transform =
         'rotateY(' + (lx * TILT).toFixed(2) + 'deg) rotateX(' + (-ly * TILT).toFixed(2) + 'deg)';
-      gl.uniform3f(U.light, lx, -ly, 0.85);
+      gl.uniform3f(U.light, lx, -ly, LIGHT_Z);
       gl.uniform1f(U.relief, RELIEF);
       gl.uniform1f(U.gloss, GLOSS);
       gl.uniform1f(U.spec, SPEC);
