@@ -183,8 +183,19 @@
     height:min(74svh,720px);
     cursor:grab; touch-action:pan-y;
     outline:none;
-    -webkit-mask-image:linear-gradient(to bottom, transparent, #000 9%, #000 91%, transparent);
-    mask-image:linear-gradient(to bottom, transparent, #000 9%, #000 91%, transparent);
+    /* Two fades, not one. The vertical was always here so the ends of the arc
+       fall away instead of being sliced. But the ellipse is centred on the
+       box's left edge, which is mid-page, so every card was also cut in half
+       down a hard vertical line - a seam the eye reads as a mistake. The
+       second gradient dissolves that half instead of cutting it. */
+    -webkit-mask-image:
+      linear-gradient(to bottom, transparent, #000 9%, #000 91%, transparent),
+      linear-gradient(to right, transparent, rgba(0,0,0,.55) 12%, #000 34%);
+    mask-image:
+      linear-gradient(to bottom, transparent, #000 9%, #000 91%, transparent),
+      linear-gradient(to right, transparent, rgba(0,0,0,.55) 12%, #000 34%);
+    -webkit-mask-composite:source-in;
+    mask-composite:intersect;
   }
   .reel:active{ cursor:grabbing; }
   .reel button{
@@ -245,28 +256,20 @@
   /* After the rules they override, not before: equal specificity means source
      order decides, and above the rail block these did nothing at all.
 
-     A vertical arc needs horizontal room a phone has not got. Laid flat along
-     the bottom it needs vertical room, which a phone has plenty of - so the
-     arc comes to mobile rotated a quarter turn rather than being dropped for
-     the rail. Everything the desktop layout sets for a side-by-side pair has
-     to be undone here. */
+     The arc does not come to the phone. Rotating it a quarter turn along the
+     bottom was tried and is the wrong shape for the screen: the band it can
+     have is about 140px tall, which leaves cards under 90px and an ellipse
+     whose depth axis is longer than the band, so the back of the ring lands
+     outside the box in the room the edition mark and the button are using.
+     Portrait and landscape paintings then move that band by different amounts
+     and the whole column shifts under you. The rail is flat by nature and
+     scrolls with the thumb, so mobile keeps the rail. */
   @media (max-width:900px){
-    .viewer{
-      display:flex; flex-direction:column-reverse; align-items:center;
-      gap:clamp(.6rem,2vw,1rem); width:100%;
-    }
+    .viewer{ display:block; width:100%; }
     .show{ width:100%; }
     .show .stage{ justify-content:center; }
     .show .edition{ justify-content:center; }
-    .reel{
-      width:100%; height:clamp(120px,17svh,168px);
-      -webkit-mask-image:linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
-      mask-image:linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
-      touch-action:pan-x;
-    }
-    /* the ellipse hangs below the strip, so the arc bulges upward */
-    .reel button{ left:50%; top:100%; }
-    .strip{ display:none; }
+    .reel{ display:none; }
   }
   @media (min-width:901px){
     .strip{ display:none; }
@@ -989,19 +992,16 @@
     startReel();
   }
 
-  function isFlat() { return window.matchMedia('(max-width:900px)').matches; }
-
   function layoutReel() {
     if (!reelCards.length) return;
     var w = reel.clientWidth, h = reel.clientHeight;
+    // below 900px the reel is display:none and both of these are zero, which
+    // is also how the layout stops running on a phone
     if (w < 2 || h < 2) return;
-    var flat = isFlat();
-    var cw = flat ? CARD_W * 0.66 : CARD_W;
-    var ch = flat ? CARD_H * 0.66 : CARD_H;
-    // upright: the ellipse sits on the left edge and bulges right.
-    // flat: it hangs below the strip and bulges up.
-    var rx = flat ? w * 0.46 : Math.max(40, w - cw * 0.62);
-    var ry = flat ? h * 0.78 : h * 0.40;
+    var cw = CARD_W, ch = CARD_H;
+    // the ellipse sits on the left edge and bulges right
+    var rx = Math.max(40, w - cw * 0.62);
+    var ry = h * 0.40;
     var step = (Math.PI * 2) / SLOTS;
     var base = Math.round(pos), frac = pos - base;
 
@@ -1025,11 +1025,8 @@
       var el = reelCards[j];
       el.style.width = cw + 'px';
       el.style.height = ch + 'px';
-      // cos still does the sizing and stacking either way; only which axis it
-      // places along changes, so the front card is rightmost upright and
-      // topmost flat
-      var px = flat ? sn * rx : c * rx;
-      var py = flat ? -c * ry : sn * ry;
+      var px = c * rx;
+      var py = sn * ry;
       el.style.transform =
         'translate(' + (px - cw / 2).toFixed(1) + 'px,' +
         (py - ch / 2).toFixed(1) + 'px) scale(' + sc.toFixed(3) + ')';
@@ -1067,12 +1064,12 @@
     reelBase = -1;
     layoutReel();
     reel.addEventListener('pointerdown', function (e) {
-      downY = dragY = isFlat() ? e.clientX : e.clientY; downId = e.pointerId;
+      downY = dragY = e.clientY; downId = e.pointerId;
       moved = false; dragging = false;
     });
     reel.addEventListener('pointermove', function (e) {
       if (downId === null || e.pointerId !== downId) return;
-      var v = isFlat() ? e.clientX : e.clientY;
+      var v = e.clientY;
       if (!moved && Math.abs(v - downY) > 4) {
         moved = dragging = true;
         // taken now, not on pointerdown: capturing up front makes the reel the
