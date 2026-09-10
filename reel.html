@@ -129,7 +129,9 @@
 
   /* ---------- edition mark ---------- */
   .edition{
-    display:flex; align-items:baseline; justify-content:center; gap:.42rem;
+    /* centred, not baseline: the number is 2.15rem and the rest under .9rem,
+       so a shared baseline left them visibly stepped against each other */
+    display:flex; align-items:center; justify-content:center; gap:.5rem;
     margin:var(--breathe) 0 0;
     font-variant-numeric:tabular-nums; line-height:1;
     opacity:0; transform:translateY(4px);
@@ -143,9 +145,9 @@
   .edition .sep{ font-size:1rem; color:#4a4e55; font-weight:300; }
   .edition .tot{ font-size:.82rem; color:var(--muted); letter-spacing:.13em; }
   .edition .uniq{
-    margin-left:.55rem; padding-left:.7rem; font-size:.62rem; letter-spacing:.18em;
+    margin-left:.4rem; padding-left:.8rem; font-size:.62rem; letter-spacing:.18em;
     text-transform:uppercase; color:#5f646b; border-left:1px solid rgba(255,255,255,.13);
-    align-self:center;
+    line-height:1.6;
   }
 
   /* ---------- the reel ----------
@@ -159,14 +161,23 @@
 
      The ellipse is centred on the left edge, so the far half is clipped away
      and what is left is an arc bulging toward the painting. */
+  /* A flex pair rather than a grid: the grid gave the painting a 1fr column
+     and it centred inside it, which put 300px of nothing between the arc and
+     the picture. Sized to content and centred together, they stay adjacent at
+     any width. */
+  /* Anchored left inside a centred box, not centred as a pair. Centring the
+     pair meant the painting's width set the group's width, so a landscape
+     piece slid the whole arc sideways and every switch between orientations
+     moved the furniture. The arc and the gap are fixed now; what varies is the
+     space to the right of the painting, where nothing is anchored. */
   .viewer{
-    display:grid;
-    grid-template-columns:minmax(190px,26%) 1fr;
-    gap:clamp(.75rem,2.4vw,2rem);
-    width:100%; max-width:1500px; align-items:center;
+    display:flex; align-items:center; justify-content:flex-start;
+    gap:clamp(.4rem,1.2vw,1.1rem);
+    width:min(100%,1400px); margin-inline:auto;
   }
   .reel{
     position:relative; overflow:hidden;
+    flex:0 0 auto; width:clamp(190px,21vw,300px);
     height:min(74svh,720px);
     cursor:grab; touch-action:pan-y;
     outline:none;
@@ -188,7 +199,14 @@
     transition:box-shadow .35s var(--ease);
   }
   .reel button[aria-current="true"]::after{ box-shadow:inset 0 0 0 2px var(--ochre); }
-  .show{ display:flex; flex-direction:column; align-items:center; min-width:0; }
+  .show{
+    display:flex; flex-direction:column; align-items:flex-start;
+    min-width:0; flex:1 1 auto;
+  }
+  .show .stage{ justify-content:flex-start; }
+  /* the number sits under the painting's left edge, which is the one edge that
+     does not move */
+  .show .edition{ justify-content:flex-start; }
 
   /* ---------- rail ---------- */
   .strip{
@@ -910,10 +928,11 @@
      better part of a second, and spinning past forty of them must not queue
      forty builds. */
   var reel = document.getElementById('reel');
-  var SLOTS = 13, MID = 6;
+  var SLOTS = 17, MID = 8;
   var CARD_W = 96, CARD_H = 132, MIN_SCALE = 0.34;
   var reelCards = [], pos = 0, posTarget = 0, reelRaf = 0, reelBase = -1;
   var dragging = false, dragY = 0, settleTimer = 0;
+  var downY = 0, downId = null, moved = false;
 
   function wrapIdx(i) { return ((i % ART.length) + ART.length) % ART.length; }
 
@@ -926,12 +945,16 @@
       var im = document.createElement('img');
       im.alt = ''; im.decoding = 'async'; im.draggable = false;
       b.appendChild(im);
-      (function (slot) {
-        b.addEventListener('click', function () {
-          if (b.dataset.moved === '1') { b.dataset.moved = '0'; return; }
-          spinTo(parseInt(b.dataset.idx, 10));
-        });
-      })(j);
+      /* this, not b: var is function scoped, so every handler would close over
+         the last button the loop made and each card would pick the same one. */
+      b.addEventListener('click', function () {
+        if (moved) return;                       // that was a drag, not a pick
+        var idx = parseInt(this.dataset.idx, 10);
+        if (isNaN(idx)) return;
+        spinTo(idx);
+        // spinTo only turns the ring; the painting has to be asked for too
+        select(idx);
+      });
       reel.appendChild(b);
       reelCards.push(b);
     }
@@ -980,7 +1003,10 @@
         'translate(' + (c * rx - CARD_W / 2).toFixed(1) + 'px,' +
         (sn * ry - CARD_H / 2).toFixed(1) + 'px) scale(' + sc.toFixed(3) + ')';
       el.style.zIndex = String(Math.round(sc * 1000));
-      el.style.opacity = (0.25 + 0.75 * ((c + 1) / 2)).toFixed(3);
+      var t = (c + 1) / 2;
+      el.style.opacity = (0.32 + 0.68 * t).toFixed(3);
+      // the same idea as the grid: what you are not looking at keeps less colour
+      el.style.filter = 'saturate(' + (0.34 + 0.66 * t).toFixed(3) + ')';
       el.setAttribute('aria-current', String(Math.abs(th) < step / 2));
     }
   }
@@ -1010,26 +1036,33 @@
     reelBase = -1;
     layoutReel();
     reel.addEventListener('pointerdown', function (e) {
-      dragging = true; dragY = e.clientY;
-      reelCards.forEach(function (c) { c.dataset.moved = '0'; });
-      reel.setPointerCapture(e.pointerId);
+      downY = dragY = e.clientY; downId = e.pointerId;
+      moved = false; dragging = false;
     });
     reel.addEventListener('pointermove', function (e) {
+      if (downId === null || e.pointerId !== downId) return;
+      if (!moved && Math.abs(e.clientY - downY) > 4) {
+        moved = dragging = true;
+        // taken now, not on pointerdown: capturing up front makes the reel the
+        // click target and a card can never be clicked at all
+        if (reel.setPointerCapture) reel.setPointerCapture(e.pointerId);
+      }
       if (!dragging) return;
       var dy = e.clientY - dragY;
-      if (Math.abs(dy) > 3) reelCards.forEach(function (c) { c.dataset.moved = '1'; });
       dragY = e.clientY;
       posTarget += dy * 0.012;
       pos += dy * 0.012;          // follow the hand exactly while it is down
       layoutReel();
     });
     function endReelDrag(e) {
-      if (!dragging) return;
-      dragging = false;
-      if (e && reel.hasPointerCapture && reel.hasPointerCapture(e.pointerId)) {
-        reel.releasePointerCapture(e.pointerId);
+      if (downId === null) return;
+      if (dragging) settleReel();
+      if (reel.hasPointerCapture && reel.hasPointerCapture(downId)) {
+        reel.releasePointerCapture(downId);
       }
-      settleReel();
+      downId = null; dragging = false;
+      // let the click through first, then forget it was a drag
+      setTimeout(function () { moved = false; }, 0);
     }
     reel.addEventListener('pointerup', endReelDrag);
     reel.addEventListener('pointercancel', endReelDrag);
